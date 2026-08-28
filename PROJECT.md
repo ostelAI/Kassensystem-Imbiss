@@ -68,7 +68,8 @@ Datei/Version austauschen = Daten bleiben erhalten, solange Origin
 | `kasse:products` | Array `{id, name, price, category, emoji, image?}` – `image` ist optional ein Data-URL (Foto statt Icon, via Mediathek/Kamera ausgewählt, clientseitig auf ~220px verkleinert) |
 | `kasse:categories` | Array von Kategorienamen, frei erweiterbar/löschbar |
 | `kasse:supplies` | Verbrauchsmaterial (nicht verkäuflich), `{id, name, emoji}` |
-| `kasse:inventory` | `{[id]: {stock, target, threshold}}` – gilt für Produkte UND supplies. **`target` ("Soll") wird UI-seitig nicht mehr angezeigt/editiert (seit 2.0.1), nur noch `stock` ("Ist") und `threshold` ("Warnen ab")** |
+| `kasse:inventory` | `{[id]: {stock, target, threshold}}` – gilt für Produkte UND supplies. `target` ("Soll") ist **tot**: seit 2.0.1 nicht mehr editierbar, seither auch nirgends mehr gelesen. Das Feld bleibt nur im Objekt, damit alte Sicherungsdateien weiter einlesbar sind. Gepflegt werden `stock` ("Ist") und `threshold` ("Warnen ab"). **`threshold: null` = für diesen Artikel nicht warnen, `threshold: 0` = warnen, sobald nichts mehr da ist.** |
+| `kasse:schwelle-migriert-v1` | Merker, dass die einmalige Schwellwert-Umstellung gelaufen ist (siehe unten). Nicht löschen. |
 | `kasse:daily-total` / `kasse:daily-sales` | Tagesumsatz / Tages-Verkaufszähler pro Produkt, resettet bei Tagesabschluss |
 | `kasse:total-sales` | Verkaufszähler pro Produkt, **niemals zurückgesetzt** – bestimmt die Sortierung in der "Alle"-Ansicht (meistverkauft oben) |
 | `kasse:day-history` | Archiv vergangener Tage (max. 60), entsteht bei jedem Tagesabschluss |
@@ -77,6 +78,22 @@ Datei/Version austauschen = Daten bleiben erhalten, solange Origin
 
 Export/Import ("⬇ Sichern" / "⬆ Wiederherstellen" in der Produktverwaltung)
 sichert/liest **alle** obigen Keys als eine JSON-Datei.
+
+## Schwellwerte ("Warnen ab") – Bedeutungsänderung
+Früher galt `threshold: 0` als "nicht gesetzt", weil 0 zugleich der automatisch
+vergebene Startwert war. Folge: Wer "Warnen ab 0" eintrug, bekam **nie** eine
+Warnung. Jetzt gilt:
+
+- **Feld leer** (`null`) → für diesen Artikel wird nicht gewarnt (Platzhalter "aus")
+- **0 eingetragen** → Warnung, sobald der Bestand auf 0 fällt
+- **Zahl eingetragen** → Warnung, sobald der Bestand diese Zahl erreicht
+
+Damit auf bestehenden Geräten nicht schlagartig für jedes je verkaufte Produkt
+eine Warnung erscheint, stellt `schwellenwerteUmstellen()` beim ersten Start
+alle vorhandenen Nullen einmalig auf `null` und setzt
+`kasse:schwelle-migriert-v1`. Bewusst gesetzte Schwellwerte > 0 bleiben
+unangetastet. Die Umstellung läuft genau einmal – danach zählt eine
+eingetragene 0 wieder als echter Schwellwert.
 
 ## Feature-Überblick (Stand v2.0.2)
 - **Dashboard**: Kategorie-Tabs oben, Produktraster. "Alle" sortiert nach

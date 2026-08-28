@@ -259,6 +259,8 @@ let dailyTotal = 0;
 let dailySales = {}; // productId -> verkaufte Menge heute
 let totalSales = {}; // productId -> verkaufte Menge insgesamt (bleibt für Ranking dauerhaft erhalten)
 let inventory = {}; // productId/supplyId -> {stock, target, threshold}
+                    // threshold === null bedeutet: fuer diesen Artikel nicht warnen.
+                    // threshold === 0 bedeutet: warnen, sobald nichts mehr da ist.
 let supplies = []; // Verbrauchsmaterial: {id, name, emoji} - nicht verkäuflich, nur Lagerbestand
 let dayHistory = []; // {date, label, total, sales}
 let editingProductId = null;
@@ -325,6 +327,7 @@ async function init(){
   }
   activeTabId = await storageGet("kasse:active-tab", "default");
   if(!tabs.find(t=>t.id===activeTabId)) activeTabId = "default";
+  await schwellenwerteUmstellen();
   renderCategories();
   renderGrid();
   renderTabs();
@@ -655,8 +658,11 @@ async function confirmPay(){
   Object.keys(tab.items).forEach(id=>{
     dailySales[id] = (dailySales[id]||0) + tab.items[id];
     totalSales[id] = (totalSales[id]||0) + tab.items[id];
-    inventory[id] = inventory[id] || {stock:0, target:0, threshold:0};
-    inventory[id].stock -= tab.items[id];
+    inventory[id] = inventory[id] || {stock:0, target:0, threshold:null};
+    /* Nicht ins Minus laufen lassen: "-2 Currywurst" gibt es nicht und stiftet
+       bei der Inventur nur Verwirrung. Wer mehr verkauft als eingetragen war,
+       korrigiert das "Ist" ohnehin beim naechsten Zaehlen. */
+    inventory[id].stock = Math.max(0, inventory[id].stock - tab.items[id]);
   });
   lastCompletedOrder = { items: {...tab.items}, total, tabName: tab.name, completedAt: new Date().toISOString() };
   await storageSet("kasse:last-completed-order", lastCompletedOrder);
@@ -824,10 +830,32 @@ function showDayDetail(index){
 
 /* ---------- Produktverwaltung ---------- */
 /* ---------- Inventur & Einkaufsliste ---------- */
+/* Ein Schwellwert gilt nur dann als gesetzt, wenn das Feld nicht leer ist.
+   Eine eingetragene 0 ist ausdruecklich ein Schwellwert: dann wird gewarnt,
+   sobald nichts mehr da ist. Frueher galt 0 als "nicht gesetzt" - dadurch
+   hat "Warnen ab 0" nie gewarnt. */
+function schwelleGesetzt(inv){
+  return !!inv && inv.threshold !== null && inv.threshold !== undefined && inv.threshold !== "";
+}
 function isLowStock(id){
   const inv = inventory[id];
-  if(!inv || !inv.threshold) return false;
+  if(!schwelleGesetzt(inv)) return false;
   return inv.stock <= inv.threshold;
+}
+
+/* Einmalige Umstellung fuer Geraete, auf denen schon Daten liegen.
+   Dort steht bei jedem je verkauften Artikel threshold: 0 - aber nicht, weil
+   es jemand eingetragen hat, sondern weil 0 der automatische Startwert war.
+   Wuerde man die 0 jetzt als Schwellwert werten, ploppte schlagartig fuer
+   fast jedes Produkt eine Warnung auf. Diese Altbestaende werden daher
+   einmalig auf "nicht gesetzt" gestellt. Danach zaehlt eine eingetragene 0. */
+async function schwellenwerteUmstellen(){
+  if(storageGet("kasse:schwelle-migriert-v1", false)) return;
+  Object.keys(inventory).forEach(id=>{
+    if(inventory[id] && inventory[id].threshold === 0) inventory[id].threshold = null;
+  });
+  await storageSet("kasse:inventory", inventory);
+  await storageSet("kasse:schwelle-migriert-v1", true);
 }
 function updateInventoryBadge(){
   const lowCount = [...products, ...supplies].filter(x=>isLowStock(x.id)).length;
@@ -877,7 +905,7 @@ function showInventoryModal(){
     const items = products.filter(p=>p.category===cat).sort((a,b)=>a.name.localeCompare(b.name,"de"));
     if(items.length===0) return "";
     const itemRows = items.map(p=>{
-      const inv = inventory[p.id] || {stock:0, target:0, threshold:0};
+      const inv = inventory[p.id] || {stock:0, target:0, threshold:null};
       const low = isLowStock(p.id);
       return `
         <div class="inv-row${low ? ' low':''}">
@@ -893,7 +921,7 @@ function showInventoryModal(){
             </div>
             <div>
               <label>Warnen ab</label>
-              <input type="number" value="${inv.threshold}" onchange="updateInventoryField('${p.id}','threshold',this.value)">
+              <input type="number" placeholder="aus" value="${schwelleGesetzt(inv) ? inv.threshold : ''}" onchange="updateInventoryField('${p.id}','threshold',this.value)">
             </div>
           </div>
           <div class="inv-restock">
@@ -908,7 +936,7 @@ function showInventoryModal(){
     return renderCollapsibleSection(cat, label, itemRows, "inv-"+i, false);
   }).join("");
   const supplyRows = supplies.slice().sort((a,b)=>a.name.localeCompare(b.name,"de")).map(s=>{
-    const inv = inventory[s.id] || {stock:0, target:0, threshold:0};
+    const inv = inventory[s.id] || {stock:0, target:0, threshold:null};
     const low = isLowStock(s.id);
     return `
       <div class="inv-row${low ? ' low':''}">
@@ -926,7 +954,7 @@ function showInventoryModal(){
           </div>
           <div>
             <label>Warnen ab</label>
-            <input type="number" value="${inv.threshold}" onchange="updateInventoryField('${s.id}','threshold',this.value)">
+            <input type="number" placeholder="aus" value="${schwelleGesetzt(inv) ? inv.threshold : ''}" onchange="updateInventoryField('${s.id}','threshold',this.value)">
           </div>
         </div>
         <div class="inv-restock">
@@ -945,7 +973,7 @@ function showInventoryModal(){
       <div class="modal">
         <button class="close-x" onclick="closeModal()">✕</button>
         <h2>📦 Inventur</h2>
-        <p style="color:var(--dim);font-size:13px;margin:-8px 0 12px;">"Ist" wird bei jedem Verkauf automatisch abgezogen. "Warnen ab" legt den Schwellwert fest, ab dem eine Warnung erscheint. Kategorie antippen zum Aufklappen.</p>
+        <p style="color:var(--dim);font-size:13px;margin:-8px 0 12px;">"Ist" wird bei jedem Verkauf automatisch abgezogen. "Warnen ab" legt fest, ab welchem Bestand gewarnt wird &ndash; eine 0 warnt, sobald nichts mehr da ist. Feld leer lassen hei&szlig;t: f&uuml;r diesen Artikel nicht warnen. Kategorie antippen zum Aufklappen.</p>
         ${sections || (supplies.length===0 ? '<div class="empty-msg">Noch keine Produkte angelegt.</div>' : '')}
         ${suppliesSection}
       </div>
@@ -1008,9 +1036,15 @@ function deleteSupply(id){
   );
 }
 async function updateInventoryField(id, field, value){
-  let v = parseFloat(value);
-  if(isNaN(v)) v = 0;
-  inventory[id] = inventory[id] || {stock:0, target:0, threshold:0};
+  const roh = String(value).trim();
+  let v;
+  if(field === "threshold" && roh === ""){
+    v = null;                                  // leeres Feld = fuer diesen Artikel nicht warnen
+  } else {
+    v = parseFloat(roh);
+    if(isNaN(v)) v = (field === "threshold") ? null : 0;
+  }
+  inventory[id] = inventory[id] || {stock:0, target:0, threshold:null};
   inventory[id][field] = v;
   await storageSet("kasse:inventory", inventory);
   updateInventoryBadge();
@@ -1020,7 +1054,7 @@ async function addRestock(id){
   const input = document.getElementById("restock-"+id);
   const qty = parseFloat(input.value);
   if(isNaN(qty) || qty<=0) return;
-  inventory[id] = inventory[id] || {stock:0, target:0, threshold:0};
+  inventory[id] = inventory[id] || {stock:0, target:0, threshold:null};
   inventory[id].stock += qty;
   await storageSet("kasse:inventory", inventory);
   updateInventoryBadge();
@@ -1033,16 +1067,14 @@ function showShoppingListModal(){
     const items = products.filter(p=>p.category===cat && isLowStock(p.id)).sort((a,b)=>a.name.localeCompare(b.name,"de"));
     if(items.length===0) return "";
     const itemRows = items.map(p=>{
-      const inv = inventory[p.id] || {stock:0, target:0, threshold:0};
-      const suggested = Math.max(inv.target - inv.stock, 0);
+      const inv = inventory[p.id] || {stock:0, target:0, threshold:null};
       return `
         <div class="inv-row low">
           <div class="inv-top">
             <span style="font-size:18px;">${productIconHtml(p,20)}</span>
             <div class="inv-name">${escapeHtml(p.name)}</div>
-            <span class="inv-warn">Ist ${inv.stock}${inv.target ? ' / Soll '+inv.target : ''}</span>
+            <span class="inv-warn">Ist ${inv.stock} &middot; Warnen ab ${inv.threshold}</span>
           </div>
-          ${suggested>0 ? `<div style="font-size:12px;color:var(--dim);margin-bottom:6px;">Empfohlene Menge: <strong style="color:var(--cream-text);">${suggested}</strong></div>` : ''}
           <div class="inv-restock">
             <input type="number" id="shop-restock-${p.id}" placeholder="Menge gekauft">
             <button onclick="addRestockFromShopping('${p.id}')">+ Erhalten</button>
@@ -1056,16 +1088,14 @@ function showShoppingListModal(){
   let suppliesSection = "";
   if(lowSupplies.length>0){
     const supplyRows = lowSupplies.map(s=>{
-      const inv = inventory[s.id] || {stock:0, target:0, threshold:0};
-      const suggested = Math.max(inv.target - inv.stock, 0);
+      const inv = inventory[s.id] || {stock:0, target:0, threshold:null};
       return `
         <div class="inv-row low">
           <div class="inv-top">
             <span style="font-size:18px;">${s.emoji}</span>
             <div class="inv-name">${escapeHtml(s.name)}</div>
-            <span class="inv-warn">Ist ${inv.stock}${inv.target ? ' / Soll '+inv.target : ''}</span>
+            <span class="inv-warn">Ist ${inv.stock} &middot; Warnen ab ${inv.threshold}</span>
           </div>
-          ${suggested>0 ? `<div style="font-size:12px;color:var(--dim);margin-bottom:6px;">Empfohlene Menge: <strong style="color:var(--cream-text);">${suggested}</strong></div>` : ''}
           <div class="inv-restock">
             <input type="number" id="shop-restock-${s.id}" placeholder="Menge gekauft">
             <button onclick="addRestockFromShopping('${s.id}')">+ Erhalten</button>
@@ -1091,7 +1121,7 @@ async function addRestockFromShopping(id){
   const input = document.getElementById("shop-restock-"+id);
   const qty = parseFloat(input.value);
   if(isNaN(qty) || qty<=0) return;
-  inventory[id] = inventory[id] || {stock:0, target:0, threshold:0};
+  inventory[id] = inventory[id] || {stock:0, target:0, threshold:null};
   inventory[id].stock += qty;
   await storageSet("kasse:inventory", inventory);
   updateInventoryBadge();
