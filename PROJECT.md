@@ -11,13 +11,42 @@ kein Framework, kein Backend). Läuft komplett im Browser, Daten liegen in
 
 ## Dateien in diesem Ordner
 - `index.html` – die komplette App (HTML+CSS+JS in einer Datei)
+- `sw.js` – Service Worker, macht die App offline-fähig (siehe unten)
 - `manifest.json` – PWA-Manifest (Name, Icons, `display: standalone`)
 - `icon-32.png`, `icon-180.png`, `icon-192.png`, `icon-512.png` – App-Icons,
   generiert aus dem vom Nutzer bereitgestellten Logo
 
 Diese Dateien liegen zusammen im Root-Verzeichnis eines Netlify-Sites-Deploys
 (kein Unterordner). `index.html` verlinkt Manifest und Icons per `<link>`-Tags
-im `<head>`.
+im `<head>` und meldet am Ende des `<script>`-Blocks den Service Worker an.
+
+**`sw.js` muss beim Deploy mit hochgeladen werden** – fehlt die Datei, ist die
+App wieder nur online lauffähig (die App selbst läuft weiter, nur ohne
+Offline-Reserve).
+
+## Offline-Fähigkeit (seit dieser Fassung)
+Der Service Worker legt die Programmdateien (`index.html`, `manifest.json`,
+Icons) in einem Browser-Cache ab. Fällt am Stand das Netz aus, startet die
+Kasse trotzdem.
+
+- **Kassendaten sind davon nicht betroffen.** Der Service Worker speichert
+  ausschließlich Dateien, kein `localStorage`. Er kann Daten weder lesen
+  noch löschen.
+- **Updates kommen weiterhin automatisch an.** Die `index.html` wird bei
+  vorhandenem Netz immer zuerst frisch geladen (network-first, 2,5 s
+  Zeitlimit). Nur wenn das Netz fehlt oder zu langsam ist, springt die
+  gespeicherte Fassung ein. Neues Deploy hochladen → beim nächsten Öffnen da.
+- **Cache-Namen** stehen in `sw.js` (`CACHE_APP`, `CACHE_FONTS`) und sind
+  bewusst von `APP_VERSION` entkoppelt, damit ein Versionssprung der App
+  nicht an den Cache gekoppelt ist. Wenn sich die Dateiliste ändert oder ein
+  Cache-Reset nötig wird: Zahl am Ende des Cache-Namens hochzählen.
+- **Google Fonts** kommen weiterhin vom CDN, werden aber mitgecacht. Ohne
+  Netz und ohne Cache greifen die Ersatzschriften – die App bleibt bedienbar,
+  sieht nur anders aus.
+- **`navigator.storage.persist()`** wird beim Start angefragt. Ohne diese
+  Kennzeichnung darf der Browser den `localStorage` bei knappem Gerätespeicher
+  von sich aus leeren. Der Browser kann die Anfrage ablehnen; bei einer
+  installierten PWA wird sie in der Regel gewährt.
 
 ## Wie es deployed ist
 - Netlify, manuelles Deploy (ZIP-Upload über app.netlify.com/drop), eigener
