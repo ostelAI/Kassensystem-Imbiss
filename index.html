@@ -884,11 +884,15 @@ function isLowStock(id){
    Wuerde man die 0 jetzt als Schwellwert werten, ploppte schlagartig fuer
    fast jedes Produkt eine Warnung auf. Diese Altbestaende werden daher
    einmalig auf "nicht gesetzt" gestellt. Danach zaehlt eine eingetragene 0. */
+function altnullenAufNichtGesetzt(lager){
+  Object.keys(lager || {}).forEach(id=>{
+    if(lager[id] && lager[id].threshold === 0) lager[id].threshold = null;
+  });
+  return lager;
+}
 async function schwellenwerteUmstellen(){
   if(storageGet("kasse:schwelle-migriert-v1", false)) return;
-  Object.keys(inventory).forEach(id=>{
-    if(inventory[id] && inventory[id].threshold === 0) inventory[id].threshold = null;
-  });
+  altnullenAufNichtGesetzt(inventory);
   await storageSet("kasse:inventory", inventory);
   await storageSet("kasse:schwelle-migriert-v1", true);
 }
@@ -1275,6 +1279,10 @@ function exportData(){
     products, categories, supplies, inventory,
     dayHistory, dailyTotal, dailySales, totalSales,
     tabs, activeTabId, lastCompletedOrder,
+    /* Muss mit in die Sicherung: Ohne diesen Merker kann die Gegenseite nicht
+       unterscheiden, ob ein "threshold: 0" bewusst gesetzt wurde oder noch der
+       alte automatische Startwert ist. Fehlt er, gilt die Datei als alt. */
+    schwelleMigriert: storageGet("kasse:schwelle-migriert-v1", false),
     exportedAt: new Date().toISOString(), version: APP_VERSION
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], {type:"application/json"});
@@ -1307,7 +1315,14 @@ function importData(event){
         products = data.products;
         categories = data.categories;
         if(Array.isArray(data.supplies)) supplies = data.supplies;
-        if(data.inventory && typeof data.inventory === "object") inventory = data.inventory;
+        if(data.inventory && typeof data.inventory === "object"){
+          inventory = data.inventory;
+          /* Sicherung aus einer Fassung vor der Schwellwert-Umstellung: Dort ist
+             jedes "threshold: 0" ein automatischer Startwert, kein bewusst
+             gesetzter Schwellwert. Wuerde man das uebernehmen, erschiene sofort
+             fuer fast jedes Produkt eine Nachbestell-Warnung. */
+          if(data.schwelleMigriert !== true) altnullenAufNichtGesetzt(inventory);
+        }
         if(Array.isArray(data.dayHistory)) dayHistory = data.dayHistory;
         if(typeof data.dailyTotal === "number") dailyTotal = data.dailyTotal;
         if(data.dailySales && typeof data.dailySales === "object") dailySales = data.dailySales;
@@ -1326,6 +1341,10 @@ function importData(event){
         await storageSet("kasse:daily-sales", dailySales);
         await storageSet("kasse:total-sales", totalSales);
         await storageSet("kasse:last-completed-order", lastCompletedOrder);
+        /* Nach dem Einlesen gilt die Umstellung als erledigt - egal aus welcher
+           Fassung die Datei kam. Sonst liefe sie beim naechsten Start erneut und
+           wuerde bewusst gesetzte Nullen wieder abschalten. */
+        await storageSet("kasse:schwelle-migriert-v1", true);
         saveTabs();
         renderCategories();
         renderGrid();

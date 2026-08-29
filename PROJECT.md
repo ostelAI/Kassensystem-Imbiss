@@ -77,7 +77,15 @@ Datei/Version austauschen = Daten bleiben erhalten, solange Origin
 | `kasse:last-completed-order` | Snapshot der zuletzt abgeschlossenen Bestellung (egal welcher Tab), read-only einsehbar über eigenen blauen Tab-Chip "🕓 Letzte Bestellung", wird bei jeder neuen Zahlung überschrieben |
 
 Export/Import ("⬇ Sichern" / "⬆ Wiederherstellen" in der Produktverwaltung)
-sichert/liest **alle** obigen Keys als eine JSON-Datei.
+sichert/liest **alle** obigen Keys als eine JSON-Datei. Die Datei enthält
+zusätzlich das Feld `schwelleMigriert` – siehe nächster Abschnitt. Wer neue
+Daten einführt, muss sie hier mit aufnehmen, sonst gehen sie bei einem
+Adresswechsel verloren.
+
+**Der Export ist zugleich der Umzugsweg.** Weil alle Daten am `localStorage`
+und damit an der URL hängen, ist "⬇ Sichern" auf der alten und
+"⬆ Wiederherstellen" auf der neuen Adresse der einzige Weg, den Datenbestand
+mitzunehmen.
 
 ## Schwellwerte ("Warnen ab") – Bedeutungsänderung
 Früher galt `threshold: 0` als "nicht gesetzt", weil 0 zugleich der automatisch
@@ -94,6 +102,15 @@ alle vorhandenen Nullen einmalig auf `null` und setzt
 `kasse:schwelle-migriert-v1`. Bewusst gesetzte Schwellwerte > 0 bleiben
 unangetastet. Die Umstellung läuft genau einmal – danach zählt eine
 eingetragene 0 wieder als echter Schwellwert.
+
+**Beim Import gilt dasselbe, und zwar unabhängig vom Merker des Geräts.** Eine
+Sicherungsdatei ohne das Feld `schwelleMigriert` stammt aus einer Fassung vor
+dieser Änderung; ihre Nullen werden beim Einlesen auf `null` gestellt
+(`altnullenAufNichtGesetzt()`). Ohne diese Sonderbehandlung ginge der Umzug auf
+eine neue Adresse schief: Dort läuft die Umstellung beim ersten Start ins Leere
+und setzt den Merker – die danach importierten Altdaten würden also nicht mehr
+umgestellt und lösten für fast jedes Produkt eine Warnung aus. Nach jedem Import
+gilt die Umstellung als erledigt.
 
 ## Feature-Überblick (Stand v2.0.2)
 - **Dashboard**: Kategorie-Tabs oben, Produktraster. "Alle" sortiert nach
