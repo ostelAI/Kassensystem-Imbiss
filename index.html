@@ -68,7 +68,7 @@
   .empty-msg{color:var(--dim);font-size:14px;padding:30px 0;text-align:center;}
 
   /* ---------- RIGHT: receipt (always visible, compact) ---------- */
-  #receipt{width:250px;flex-shrink:0;background:var(--paper);color:var(--ink);display:flex;flex-direction:column;position:relative;}
+  #receipt{width:285px;flex-shrink:0;background:var(--paper);color:var(--ink);display:flex;flex-direction:column;position:relative;}
   #receipt::before{content:"";display:block;height:14px;flex-shrink:0;background:
      radial-gradient(circle at 8px 7px, var(--bg) 6px, transparent 7px) repeat-x;
      background-size:16px 14px;}
@@ -95,10 +95,11 @@
   .cl-qtybox{display:flex;align-items:center;gap:4px;flex-shrink:0;}
   /* Tippziel fuer einen Finger auf dem Tablet - vorher 18x18 px und damit
      kaum treffsicher zu bedienen. */
-  .cl-btn{width:34px;height:34px;border-radius:8px;border:1px solid #c9bc9e;background:#efe6d2;color:var(--ink);font-size:19px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;}
+  .cl-btn{width:32px;height:32px;border-radius:8px;border:1px solid #c9bc9e;background:#efe6d2;color:var(--ink);font-size:19px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;}
   .cl-btn:active{background:#e0d4b7;}
-  .cl-qty{width:20px;text-align:center;font-size:13px;font-weight:700;}
-  .cl-price{width:48px;text-align:right;}
+  .cl-qty{width:18px;text-align:center;font-size:13px;font-weight:700;}
+  /* Breit genug fuer zweistellige Betraege ohne Umbruch (z. B. "14,00 EUR"). */
+  .cl-price{width:62px;text-align:right;flex-shrink:0;white-space:nowrap;}
   #receipt-totals{padding:8px 14px 4px;border-top:1px dashed var(--paper-line);font-family:'IBM Plex Mono',monospace;flex-shrink:0;}
   .trow{display:flex;justify-content:space-between;font-size:12px;padding:2px 0;color:#5c4f3d;}
   .trow.gesamt{font-size:17px;font-weight:700;color:var(--ink);padding-top:4px;}
@@ -170,9 +171,11 @@
   .loading{display:flex;align-items:center;justify-content:center;height:100%;color:var(--dim);font-size:14px;}
 
   @media(max-width:640px){
-    #receipt{width:150px;}
-    .cl-btn{width:28px;height:28px;font-size:17px;}
-    .cl-price{width:42px;}
+    #receipt{width:175px;}
+    .cart-line{flex-wrap:wrap;}
+    .cl-name{flex:1 0 100%;order:-1;margin-bottom:5px;}
+    .cl-btn{width:30px;height:30px;font-size:17px;}
+    .cl-price{width:42px;flex:1;}
     #shop-title{font-size:15px;}
     .topbar-btn{padding:8px 10px;font-size:11px;}
     .product-card{padding:10px 6px;}
