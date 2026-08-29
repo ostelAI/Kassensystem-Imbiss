@@ -97,7 +97,11 @@ eingetragene 0 wieder als echter Schwellwert.
 
 ## Feature-Überblick (Stand v2.0.2)
 - **Dashboard**: Kategorie-Tabs oben, Produktraster. "Alle" sortiert nach
-  Gesamt-Verkaufsranking (dauerhaft), einzelne Kategorien alphabetisch.
+  Gesamt-Verkaufsranking, einzelne Kategorien alphabetisch. Die Reihenfolge
+  wird bewusst **nur zu festen Zeitpunkten** neu bestimmt (`rangfolge` /
+  `rangfolgeNeuBestimmen()`): beim Start, beim Tagesabschluss und wenn sich
+  der Produktbestand ändert. Früher wurde nach jedem Verkauf neu sortiert –
+  dadurch verschoben sich die Kacheln mitten im Betrieb unter dem Finger.
   Zeigt Foto statt Emoji, falls eins hinterlegt ist.
 - **Bon** (rechts, dauerhaft sichtbar, kompakt): Tab-Leiste über dem Bon –
   Reihenfolge: 🔴 Schnellverkauf → 🔵 Letzte Bestellung (falls vorhanden) →
@@ -107,7 +111,11 @@ eingetragene 0 wieder als echter Schwellwert.
 - **Kasse**: Zahlenblock, Schnellbeträge, automatische Rückgeldberechnung.
 - **📦 Inventur**: Aufklappbare Kategorien (Klick-Zustand bleibt über
   Re-Renders erhalten – wichtiger Bugfix in 2.0.1), pro Produkt/Verbrauchs-
-  material nur noch "Ist" + "Warnen ab". "+ Hinzufügen" für Wareneingang.
+  material nur noch "Ist" + "Warnen ab". Eingaben aktualisieren nur noch die
+  **betroffene Zeile** (`aktualisiereLagerZeile()`), nicht mehr das ganze
+  Fenster – sonst sprang die Liste bei jeder Eingabe an den Anfang und der
+  Fokus ging verloren. Gleiches Prinzip auf der Einkaufsliste: eine
+  abgearbeitete Zeile wird herausgenommen statt die Liste neu aufzubauen. "+ Hinzufügen" für Wareneingang.
   Verbrauchsmaterial (z. B. Frittierfett) in eigenem Abschnitt, nicht
   verkäuflich, wird nicht automatisch abgezogen.
 - **🛒 Einkaufsliste**: automatisch aus Inventur generiert, alles unter

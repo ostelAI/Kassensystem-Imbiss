@@ -90,12 +90,14 @@
   .tab-chip-add{flex-shrink:0;background:none;border:1px dashed #b6a780;border-radius:999px;padding:8px 14px;font-size:13px;font-weight:700;color:#8a7d68;cursor:pointer;}
   #cart-lines{flex:1;overflow-y:auto;padding:8px 14px;font-family:'IBM Plex Mono',monospace;font-size:12px;}
   .cart-empty{color:#8a7d68;text-align:center;padding:30px 0;font-family:'Work Sans',sans-serif;font-size:12px;}
-  .cart-line{display:flex;align-items:center;gap:4px;padding:6px 0;border-bottom:1px dotted var(--paper-line);}
+  .cart-line{display:flex;align-items:center;gap:5px;padding:7px 0;border-bottom:1px dotted var(--paper-line);}
   .cl-name{flex:1;min-width:0;white-space:normal;word-break:break-word;}
-  .cl-qtybox{display:flex;align-items:center;gap:3px;}
-  .cl-btn{width:18px;height:18px;border-radius:5px;border:1px solid #c9bc9e;background:#efe6d2;color:var(--ink);font-size:12px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;}
+  .cl-qtybox{display:flex;align-items:center;gap:4px;flex-shrink:0;}
+  /* Tippziel fuer einen Finger auf dem Tablet - vorher 18x18 px und damit
+     kaum treffsicher zu bedienen. */
+  .cl-btn{width:34px;height:34px;border-radius:8px;border:1px solid #c9bc9e;background:#efe6d2;color:var(--ink);font-size:19px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;}
   .cl-btn:active{background:#e0d4b7;}
-  .cl-qty{width:14px;text-align:center;font-size:11px;}
+  .cl-qty{width:20px;text-align:center;font-size:13px;font-weight:700;}
   .cl-price{width:48px;text-align:right;}
   #receipt-totals{padding:8px 14px 4px;border-top:1px dashed var(--paper-line);font-family:'IBM Plex Mono',monospace;flex-shrink:0;}
   .trow{display:flex;justify-content:space-between;font-size:12px;padding:2px 0;color:#5c4f3d;}
@@ -169,6 +171,8 @@
 
   @media(max-width:640px){
     #receipt{width:150px;}
+    .cl-btn{width:28px;height:28px;font-size:17px;}
+    .cl-price{width:42px;}
     #shop-title{font-size:15px;}
     .topbar-btn{padding:8px 10px;font-size:11px;}
     .product-card{padding:10px 6px;}
@@ -328,6 +332,7 @@ async function init(){
   activeTabId = await storageGet("kasse:active-tab", "default");
   if(!tabs.find(t=>t.id===activeTabId)) activeTabId = "default";
   await schwellenwerteUmstellen();
+  rangfolgeNeuBestimmen();
   renderCategories();
   renderGrid();
   renderTabs();
@@ -361,12 +366,34 @@ function renderCategories(){
   });
 }
 
+/* Reihenfolge der Kacheln in der "Alle"-Ansicht.
+   Sortiert wird weiterhin nach Gesamtverkaeufen, aber die Reihenfolge wird
+   bewusst nur zu festen Zeitpunkten neu bestimmt: beim Start, beim
+   Tagesabschluss und wenn sich der Produktbestand aendert. Frueher wurde nach
+   jedem abgeschlossenen Verkauf neu sortiert - dadurch verschoben sich die
+   Kacheln mitten im Betrieb unter dem Finger. */
+let rangfolge = {};   // productId -> Platz
+function rangfolgeNeuBestimmen(){
+  rangfolge = {};
+  products.slice()
+    .sort((a,b)=>(totalSales[b.id]||0) - (totalSales[a.id]||0))
+    .forEach((p,i)=>{ rangfolge[p.id] = i; });
+}
+
 function renderGrid(){
   const grid = document.getElementById("grid");
   grid.innerHTML = "";
   let list = products.filter(p => activeCategory==="Alle" || p.category===activeCategory);
   if(activeCategory==="Alle"){
-    list = list.slice().sort((a,b) => (totalSales[b.id]||0) - (totalSales[a.id]||0));
+    list = list.slice().sort((a,b) => {
+      const ra = rangfolge[a.id], rb = rangfolge[b.id];
+      /* Produkte, die es beim letzten Festlegen noch nicht gab, kommen ans
+         Ende - bis die Rangfolge das naechste Mal neu bestimmt wird. */
+      if(ra === undefined && rb === undefined) return a.name.localeCompare(b.name, "de");
+      if(ra === undefined) return 1;
+      if(rb === undefined) return -1;
+      return ra - rb;
+    });
   } else {
     list = list.slice().sort((a,b) => a.name.localeCompare(b.name, "de"));
   }
@@ -681,7 +708,9 @@ async function confirmPay(){
   saveTabs();
   renderTabs();
   renderCart();
-  renderGrid();
+  /* Bewusst kein renderGrid() mehr: Am Raster aendert sich durch einen Verkauf
+     nichts ausser der Rangfolge - und genau die soll waehrend des Betriebs
+     stehen bleiben. Spart nebenbei einen kompletten Neuaufbau pro Verkauf. */
   closeModal();
 }
 
@@ -746,6 +775,9 @@ async function resetDaily(){
   await storageSet("kasse:daily-total", 0);
   await storageSet("kasse:daily-sales", {});
   updateDailyDisplay();
+  /* Zum Tagesabschluss darf sich die Reihenfolge neu einpendeln - da steht
+     niemand am Tresen und wartet. */
+  rangfolgeNeuBestimmen();
   renderGrid();
   closeModal();
 }
@@ -908,16 +940,16 @@ function showInventoryModal(){
       const inv = inventory[p.id] || {stock:0, target:0, threshold:null};
       const low = isLowStock(p.id);
       return `
-        <div class="inv-row${low ? ' low':''}">
+        <div class="inv-row${low ? ' low':''}" id="invrow-${p.id}">
           <div class="inv-top">
             <span style="font-size:18px;">${productIconHtml(p,20)}</span>
             <div class="inv-name">${escapeHtml(p.name)}</div>
-            ${low ? '<span class="inv-warn">⚠ Nachbestellen</span>' : ''}
+            <span class="inv-warn" id="warn-${p.id}" style="display:${low ? '' : 'none'};">⚠ Nachbestellen</span>
           </div>
           <div class="inv-fields">
             <div>
               <label>Ist</label>
-              <input type="number" value="${inv.stock}" onchange="updateInventoryField('${p.id}','stock',this.value)">
+              <input type="number" id="ist-${p.id}" value="${inv.stock}" onchange="updateInventoryField('${p.id}','stock',this.value)">
             </div>
             <div>
               <label>Warnen ab</label>
@@ -939,18 +971,18 @@ function showInventoryModal(){
     const inv = inventory[s.id] || {stock:0, target:0, threshold:null};
     const low = isLowStock(s.id);
     return `
-      <div class="inv-row${low ? ' low':''}">
+      <div class="inv-row${low ? ' low':''}" id="invrow-${s.id}">
         <div class="inv-top">
           <span style="font-size:18px;">${s.emoji}</span>
           <div class="inv-name">${escapeHtml(s.name)}</div>
-          ${low ? '<span class="inv-warn">⚠ Nachbestellen</span>' : ''}
+          <span class="inv-warn" id="warn-${s.id}" style="display:${low ? '' : 'none'};">⚠ Nachbestellen</span>
           <button class="icon-btn" style="width:26px;height:26px;font-size:12px;flex-shrink:0;" onclick="openSupplyForm('${s.id}')">✎</button>
           <button class="icon-btn danger" style="width:26px;height:26px;font-size:12px;flex-shrink:0;" onclick="deleteSupply('${s.id}')">🗑</button>
         </div>
         <div class="inv-fields">
           <div>
             <label>Ist</label>
-            <input type="number" value="${inv.stock}" onchange="updateInventoryField('${s.id}','stock',this.value)">
+            <input type="number" id="ist-${s.id}" value="${inv.stock}" onchange="updateInventoryField('${s.id}','stock',this.value)">
           </div>
           <div>
             <label>Warnen ab</label>
@@ -1035,6 +1067,39 @@ function deleteSupply(id){
     }
   );
 }
+/* Frischt genau eine Zeile der Inventur auf, statt das ganze Fenster neu zu
+   bauen. Vorher rief jede Eingabe showInventoryModal() - dabei sprang die Liste
+   an den Anfang zurueck, der Fokus ging verloren, und ein direkt folgender
+   Fingertipp landete auf einem Element, das es schon nicht mehr gab. */
+function aktualisiereLagerZeile(id){
+  const zeile = document.getElementById("invrow-" + id);
+  if(!zeile) return;
+  const knapp = isLowStock(id);
+  zeile.classList.toggle("low", knapp);
+  const warnung = document.getElementById("warn-" + id);
+  if(warnung) warnung.style.display = knapp ? "" : "none";
+  const istFeld = document.getElementById("ist-" + id);
+  /* Das Feld nicht ueberschreiben, solange jemand darin tippt. */
+  if(istFeld && document.activeElement !== istFeld){
+    istFeld.value = (inventory[id] && inventory[id].stock) || 0;
+  }
+  aktualisiereInventurZaehler();
+}
+
+/* Zaehler in den Kategorie-Ueberschriften ("5 | 2 knapp") neu berechnen.
+   Zaehlt direkt die Zeilen im Fenster - so bleibt die Logik an einer Stelle. */
+function aktualisiereInventurZaehler(){
+  document.querySelectorAll(".inv-cat-section").forEach(abschnitt=>{
+    const zaehler = abschnitt.querySelector(".inv-cat-count");
+    const koerper = abschnitt.querySelector(".inv-cat-body");
+    if(!zaehler || !koerper) return;
+    const alle = koerper.querySelectorAll(".inv-row").length;
+    if(alle === 0) return;
+    const knapp = koerper.querySelectorAll(".inv-row.low").length;
+    zaehler.textContent = knapp > 0 ? alle + " · ⚠ " + knapp : String(alle);
+  });
+}
+
 async function updateInventoryField(id, field, value){
   const roh = String(value).trim();
   let v;
@@ -1048,7 +1113,7 @@ async function updateInventoryField(id, field, value){
   inventory[id][field] = v;
   await storageSet("kasse:inventory", inventory);
   updateInventoryBadge();
-  showInventoryModal();
+  aktualisiereLagerZeile(id);
 }
 async function addRestock(id){
   const input = document.getElementById("restock-"+id);
@@ -1057,8 +1122,9 @@ async function addRestock(id){
   inventory[id] = inventory[id] || {stock:0, target:0, threshold:null};
   inventory[id].stock += qty;
   await storageSet("kasse:inventory", inventory);
+  input.value = "";                 // damit dieselbe Menge nicht versehentlich doppelt gebucht wird
   updateInventoryBadge();
-  showInventoryModal();
+  aktualisiereLagerZeile(id);
 }
 
 function showShoppingListModal(){
@@ -1069,7 +1135,7 @@ function showShoppingListModal(){
     const itemRows = items.map(p=>{
       const inv = inventory[p.id] || {stock:0, target:0, threshold:null};
       return `
-        <div class="inv-row low">
+        <div class="inv-row low" id="shoprow-${p.id}">
           <div class="inv-top">
             <span style="font-size:18px;">${productIconHtml(p,20)}</span>
             <div class="inv-name">${escapeHtml(p.name)}</div>
@@ -1090,7 +1156,7 @@ function showShoppingListModal(){
     const supplyRows = lowSupplies.map(s=>{
       const inv = inventory[s.id] || {stock:0, target:0, threshold:null};
       return `
-        <div class="inv-row low">
+        <div class="inv-row low" id="shoprow-${s.id}">
           <div class="inv-top">
             <span style="font-size:18px;">${s.emoji}</span>
             <div class="inv-name">${escapeHtml(s.name)}</div>
@@ -1125,7 +1191,25 @@ async function addRestockFromShopping(id){
   inventory[id].stock += qty;
   await storageSet("kasse:inventory", inventory);
   updateInventoryBadge();
-  showShoppingListModal();
+  /* Erledigte Zeile herausnehmen, statt die Liste neu aufzubauen - sonst
+     springt sie beim Abarbeiten staendig an den Anfang zurueck. */
+  const zeile = document.getElementById("shoprow-" + id);
+  if(zeile && !isLowStock(id)){
+    const abschnitt = zeile.closest(".inv-cat-section");
+    zeile.remove();
+    if(abschnitt && abschnitt.querySelectorAll(".inv-row").length === 0) abschnitt.remove();
+    aktualisiereInventurZaehler();
+    const fenster = document.querySelector("#modal-root .modal");
+    if(fenster && fenster.querySelectorAll(".inv-row").length === 0){
+      const hinweis = document.createElement("div");
+      hinweis.className = "empty-msg";
+      hinweis.textContent = "Aktuell muss nichts nachbestellt werden. 🎉";
+      fenster.appendChild(hinweis);
+    }
+  } else {
+    input.value = "";
+    aktualisiereLagerZeile(id);
+  }
 }
 
 function openManage(){
@@ -1229,6 +1313,7 @@ function importData(event){
         if(!tabs.find(t=>t.id==="default")) tabs.unshift({id:"default", name:"Schnellverkauf", items:{}});
         activeTabId = (data.activeTabId && tabs.find(t=>t.id===data.activeTabId)) ? data.activeTabId : "default";
         if(data.lastCompletedOrder && typeof data.lastCompletedOrder === "object") lastCompletedOrder = data.lastCompletedOrder;
+        rangfolgeNeuBestimmen();
         await storageSet("kasse:products", products);
         await storageSet("kasse:categories", categories);
         await storageSet("kasse:supplies", supplies);
@@ -1292,6 +1377,7 @@ function deleteProduct(id){
       delete inventory[id];
       await storageSet("kasse:products", products);
       await storageSet("kasse:inventory", inventory);
+      rangfolgeNeuBestimmen();
       renderGrid();
       renderManageModal();
       updateInventoryBadge();
@@ -1419,6 +1505,7 @@ async function saveProduct(){
   }
   editingProductId = null;
   await storageSet("kasse:products", products);
+  rangfolgeNeuBestimmen();
   renderCategories();
   renderGrid();
   openManage();
