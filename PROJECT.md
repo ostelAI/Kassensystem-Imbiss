@@ -70,6 +70,7 @@ Datei/Version austauschen = Daten bleiben erhalten, solange Origin
 | `kasse:supplies` | Verbrauchsmaterial (nicht verkäuflich), `{id, name, emoji}` |
 | `kasse:inventory` | `{[id]: {stock, target, threshold}}` – gilt für Produkte UND supplies. `target` ("Soll") ist **tot**: seit 2.0.1 nicht mehr editierbar, seither auch nirgends mehr gelesen. Das Feld bleibt nur im Objekt, damit alte Sicherungsdateien weiter einlesbar sind. Gepflegt werden `stock` ("Ist") und `threshold` ("Warnen ab"). **`threshold: null` = für diesen Artikel nicht warnen, `threshold: 0` = warnen, sobald nichts mehr da ist.** |
 | `kasse:schwelle-migriert-v1` | Merker, dass die einmalige Schwellwert-Umstellung gelaufen ist (siehe unten). Nicht löschen. |
+| `kasse:pin` | SHA-256-Prüfsumme der PIN für die Umsatzansichten. Nie im Klartext. Fehlt der Key, ist noch keine PIN vergeben. |
 | `kasse:daily-total` / `kasse:daily-sales` | Tagesumsatz / Tages-Verkaufszähler pro Produkt, resettet bei Tagesabschluss |
 | `kasse:total-sales` | Verkaufszähler pro Produkt, **niemals zurückgesetzt** – bestimmt die Sortierung in der "Alle"-Ansicht (meistverkauft oben) |
 | `kasse:day-history` | Archiv vergangener Tage (max. 60), entsteht bei jedem Tagesabschluss |
@@ -112,6 +113,42 @@ und setzt den Merker – die danach importierten Altdaten würden also nicht meh
 umgestellt und lösten für fast jedes Produkt eine Warnung aus. Nach jedem Import
 gilt die Umstellung als erledigt.
 
+## PIN für die Umsatzansichten
+Am Stand schaut der halbe Tresen auf den Bildschirm. Der Tagesumsatz steht
+deshalb nicht mehr offen in der Kopfzeile, sondern als `•••`. Hinter der PIN
+liegen **alle** Ansichten mit Umsatzbezug:
+
+- der Betrag in der Kopfzeile
+- 🏆 Tagesranking
+- 📅 Wochenverlauf
+- der Tagesabschluss (er sitzt im Tagesumsatz-Fenster)
+
+Verkaufen, Bons und Inventur bleiben frei bedienbar – die braucht sie im
+Betrieb, und dort steht kein Umsatz.
+
+**Ablauf:** `mitPin(aktion)` führt die Aktion aus, sobald die PIN stimmt. Ist
+noch keine vergeben, wird sie beim ersten Zugriff festgelegt (Eingabe +
+Wiederholung). Nach richtiger Eingabe bleibt es **2 Minuten** entsperrt
+(`PIN_ENTSPERRT_MS`), damit nicht für Ranking und Wochenverlauf zweimal
+hintereinander getippt werden muss. `updateClock()` prüft mit, sodass sich der
+Betrag nach Ablauf von selbst wieder verdeckt. Eingabe über einen Zifferblock,
+nicht über die Tastatur – es ist ein Touch-Gerät.
+
+**Vergessene PIN:** "Produkte verwalten" enthält "🔒 PIN zurücksetzen", solange
+eine gesetzt ist. Damit kommt sie immer wieder herein. Der Preis: Wer den Knopf
+kennt, umgeht die Sperre.
+
+**Was das leistet – und was nicht.** Es schützt gegen Blicke über die Schulter.
+Es schützt *nicht* gegen jemanden, der das Tablet in der Hand hat und sich
+auskennt, denn die Daten liegen im `localStorage` des Geräts. Genau der
+beiläufige Schutz war aber der Zweck. Die PIN wird als Prüfsumme abgelegt, damit
+sie beim Blick in den Speicher nicht im Klartext steht – sie könnte anderswo
+wiederverwendet sein.
+
+**Umzug:** Die Prüfsumme wandert im Feld `pin` in der Sicherungsdatei mit. Ohne
+das stünde die App auf einer neuen Adresse ohne PIN da – die Umsatzansichten
+wären dort offen.
+
 ## Datenprüfung (`datensatzPruefen`)
 Alles, was aus dem `localStorage` oder aus einer Sicherungsdatei kommt, gilt als
 unbekannt und wird durch `datensatzPruefen()` normalisiert, bevor die App damit
@@ -152,7 +189,8 @@ dort nie ein vom Benutzer bestimmter Text:
   unverfängliches Zeichenrepertoire begrenzt hat
 
 ## Feature-Überblick (Stand v2.0.2)
-- **Dashboard**: Kategorie-Tabs oben, Produktraster. "Alle" sortiert nach
+- **Dashboard**: Kopfzeile mit verdecktem Tagesumsatz (`•••`, antippen und PIN),
+  Kategorie-Tabs, Produktraster. "Alle" sortiert nach
   Gesamt-Verkaufsranking, einzelne Kategorien alphabetisch. Die Reihenfolge
   wird bewusst **nur zu festen Zeitpunkten** neu bestimmt (`rangfolge` /
   `rangfolgeNeuBestimmen()`): beim Start, beim Tagesabschluss und wenn sich

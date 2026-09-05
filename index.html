@@ -199,14 +199,14 @@
     <div id="topbar">
       <div id="shop-title">🌭 Imbiss Kasse <span id="version-tag"></span></div>
       <div style="display:flex;align-items:center;gap:8px;">
-        <div id="daily" onclick="showDailyModal()">
+        <div id="daily" onclick="mitPin(showDailyModal)">
           <div>
             <div class="label">Heute</div>
             <div class="amount" id="daily-amount">0,00 €</div>
           </div>
         </div>
-        <button class="topbar-btn" onclick="showRankingModal()" title="Tagesranking">🏆</button>
-        <button class="topbar-btn" onclick="showWeekModal()" title="Wochenverlauf">📅</button>
+        <button class="topbar-btn" onclick="mitPin(showRankingModal)" title="Tagesranking">🏆</button>
+        <button class="topbar-btn" onclick="mitPin(showWeekModal)" title="Wochenverlauf">📅</button>
         <button class="topbar-btn" id="inventory-btn" onclick="showInventoryModal()" title="Inventur" style="position:relative;">📦</button>
         <button class="topbar-btn" id="shopping-btn" onclick="showShoppingListModal()" title="Einkaufsliste" style="position:relative;">🛒</button>
         <button class="topbar-btn" onclick="toggleFullscreen()" title="Vollbild">⛶</button>
@@ -371,12 +371,175 @@ async function init(){
 }
 
 function updateClock(){
+  /* Prueft nebenbei, ob die Entsperrung abgelaufen ist - dann verdeckt sich der
+     Betrag von selbst wieder, auch wenn niemand etwas antippt. */
+  updateDailyDisplay();
   const now = new Date();
   document.getElementById("rtime").textContent = now.toLocaleDateString("de-DE") + "  " + now.toLocaleTimeString("de-DE",{hour:'2-digit',minute:'2-digit'});
 }
 
+/* ---------- PIN fuer die Umsatzansichten ----------
+   Schuetzt gegen Blicke ueber die Schulter - Kunden am Tresen, Aushilfen.
+   Nicht gegen jemanden, der das Geraet in der Hand hat und sich auskennt: Die
+   Daten liegen im Browser des Tablets und sind dort einsehbar. Genau dieser
+   beilaeufige Schutz ist hier aber der Zweck. */
+const PIN_LAENGE = 4;
+const PIN_ENTSPERRT_MS = 2 * 60 * 1000;   // nach der Eingabe 2 Minuten offen
+let pinEntsperrtBis = 0;
+let pinEingabe = "";
+let pinZweiteEingabe = null;   // beim Festlegen: erste Eingabe zum Vergleich
+let pinFolgeAktion = null;     // was nach erfolgreicher Eingabe passieren soll
+
+function pinEntsperrt(){
+  return Date.now() < pinEntsperrtBis;
+}
+function pinGesetzt(){
+  return typeof storageGet("kasse:pin", null) === "string";
+}
+async function pinPruefsumme(pin){
+  const text = "kasse-pin:" + pin;
+  if(window.crypto && crypto.subtle && crypto.subtle.digest){
+    const puffer = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+    return [...new Uint8Array(puffer)].map(b=>b.toString(16).padStart(2,"0")).join("");
+  }
+  /* Notbehelf, wenn Web-Crypto fehlt (etwa beim Oeffnen direkt von der
+     Festplatte). Schuetzt nur vor beilaeufigem Mitlesen im Speicher. */
+  let h = 0;
+  for(let i = 0; i < text.length; i++) h = (h * 31 + text.charCodeAt(i)) | 0;
+  return "einfach:" + (h >>> 0).toString(16);
+}
+
+/* Fuehrt eine Aktion aus, sobald die PIN stimmt. Ist noch keine PIN vergeben,
+   wird sie zuerst festgelegt. */
+function mitPin(aktion){
+  if(pinEntsperrt()){ aktion(); return; }
+  pinEingabe = "";
+  pinFolgeAktion = aktion;
+  if(pinGesetzt()) pinAbfrageAnzeigen();
+  else pinFestlegenAnzeigen();
+}
+
+function pinPunkte(){
+  let anzeige = "";
+  for(let i = 0; i < PIN_LAENGE; i++) anzeige += (i < pinEingabe.length ? "●" : "○") + " ";
+  return anzeige.trim();
+}
+function pinAnzeigeAuffrischen(fehlertext){
+  const punkte = document.getElementById("pin-punkte");
+  if(punkte) punkte.textContent = pinPunkte();
+  const fehler = document.getElementById("pin-fehler");
+  if(fehler) fehler.textContent = fehlertext || "";
+}
+
+function pinTastenHtml(){
+  let tasten = "";
+  for(let n = 1; n <= 9; n++) tasten += `<button onclick="pinZiffer('${n}')">${n}</button>`;
+  tasten += `<button onclick="pinLoeschen()">⌫</button>`;
+  tasten += `<button onclick="pinZiffer('0')">0</button>`;
+  tasten += `<button onclick="closeModal()" style="font-size:14px;">Abbruch</button>`;
+  return tasten;
+}
+function pinFensterHtml(titel, hinweis){
+  return `
+    <div class="modal-overlay" onclick="if(event.target===this) closeModal()">
+      <div class="modal" style="max-width:300px;">
+        <h2>${escapeHtml(titel)}</h2>
+        <p style="color:var(--dim);font-size:13px;margin:-8px 0 12px;">${escapeHtml(hinweis)}</p>
+        <div class="numpad-display" style="text-align:center;">
+          <div class="given" id="pin-punkte" style="letter-spacing:6px;">${pinPunkte()}</div>
+          <div id="pin-fehler" style="color:var(--paprika);font-size:12px;min-height:17px;margin-top:4px;"></div>
+        </div>
+        <div class="numgrid">${pinTastenHtml()}</div>
+      </div>
+    </div>
+  `;
+}
+
+function pinAbfrageAnzeigen(){
+  pinEingabe = "";
+  document.getElementById("modal-root").innerHTML =
+    pinFensterHtml("PIN eingeben", "Zum Anzeigen der Umsätze.");
+}
+function pinFestlegenAnzeigen(){
+  pinEingabe = "";
+  pinZweiteEingabe = null;
+  document.getElementById("modal-root").innerHTML =
+    pinFensterHtml("PIN festlegen", "Vierstellig. Sie schützt die Umsatzansichten vor fremden Blicken.");
+}
+
+function pinZiffer(ziffer){
+  if(pinEingabe.length >= PIN_LAENGE) return;
+  pinEingabe += ziffer;
+  pinAnzeigeAuffrischen();
+  if(pinEingabe.length === PIN_LAENGE) setTimeout(pinAbschliessen, 120);
+}
+function pinLoeschen(){
+  pinEingabe = pinEingabe.slice(0, -1);
+  pinAnzeigeAuffrischen();
+}
+
+async function pinAbschliessen(){
+  const eingabe = pinEingabe;
+  pinEingabe = "";
+  if(pinGesetzt() && pinZweiteEingabe === null){
+    const gespeichert = storageGet("kasse:pin", null);
+    if(await pinPruefsumme(eingabe) === gespeichert){
+      pinEntsperrtBis = Date.now() + PIN_ENTSPERRT_MS;
+      updateDailyDisplay();
+      const aktion = pinFolgeAktion;
+      pinFolgeAktion = null;
+      closeModal();
+      if(aktion) aktion();
+    } else {
+      pinAnzeigeAuffrischen("Falsche PIN.");
+    }
+    return;
+  }
+  /* Festlegen: erst eingeben, dann zur Bestaetigung wiederholen. */
+  if(pinZweiteEingabe === null){
+    pinZweiteEingabe = eingabe;
+    document.getElementById("modal-root").innerHTML =
+      pinFensterHtml("PIN wiederholen", "Zur Sicherheit noch einmal dieselbe PIN.");
+    return;
+  }
+  if(pinZweiteEingabe !== eingabe){
+    pinZweiteEingabe = null;
+    document.getElementById("modal-root").innerHTML =
+      pinFensterHtml("PIN festlegen", "Die Eingaben waren verschieden. Bitte noch einmal.");
+    return;
+  }
+  await storageSet("kasse:pin", await pinPruefsumme(eingabe));
+  pinZweiteEingabe = null;
+  pinEntsperrtBis = Date.now() + PIN_ENTSPERRT_MS;
+  updateDailyDisplay();
+  const aktion = pinFolgeAktion;
+  pinFolgeAktion = null;
+  closeModal();
+  showToast("PIN gespeichert");
+  if(aktion) aktion();
+}
+
+function pinZuruecksetzenFragen(){
+  showConfirm(
+    "PIN zurücksetzen?",
+    "Die bisherige PIN wird gelöscht. Beim nächsten Blick auf die Umsätze wird eine neue festgelegt.",
+    "Zurücksetzen",
+    async ()=>{
+      localStorage.removeItem("kasse:pin");
+      pinEntsperrtBis = 0;
+      updateDailyDisplay();
+      closeModal();
+      showToast("PIN gelöscht");
+    }
+  );
+}
+
 function updateDailyDisplay(){
-  document.getElementById("daily-amount").textContent = fmt(dailyTotal);
+  const feld = document.getElementById("daily-amount");
+  if(!feld) return;
+  /* Am Stand schaut der halbe Tresen auf den Bildschirm. Der Tagesumsatz wird
+     deshalb nur gezeigt, solange bewusst entsperrt wurde. */
+  feld.textContent = pinEntsperrt() ? fmt(dailyTotal) : "•••";
 }
 
 /* ---------- rendering ---------- */
@@ -1516,6 +1679,9 @@ function renderManageModal(){
           <button class="btn-secondary" onclick="exportData()">⬇ Sichern</button>
           <button class="btn-secondary" onclick="document.getElementById('import-file').click()">⬆ Wiederherstellen</button>
         </div>
+        ${pinGesetzt() ? `<div class="modal-actions">
+          <button class="btn-secondary" style="width:100%;" onclick="pinZuruecksetzenFragen()">🔒 PIN zurücksetzen</button>
+        </div>` : ''}
         <input type="file" id="import-file" accept="application/json" style="display:none;" onchange="importData(event)">
       </div>
     </div>
@@ -1530,6 +1696,9 @@ function exportData(){
        unterscheiden, ob ein "threshold: 0" bewusst gesetzt wurde oder noch der
        alte automatische Startwert ist. Fehlt er, gilt die Datei als alt. */
     schwelleMigriert: storageGet("kasse:schwelle-migriert-v1", false),
+    /* Als Pruefsumme, nicht im Klartext. Muss mit, sonst steht sie nach einem
+       Adresswechsel ohne PIN da - und die Umsatzansichten waeren offen. */
+    pin: storageGet("kasse:pin", null),
     exportedAt: new Date().toISOString(), version: APP_VERSION
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], {type:"application/json"});
@@ -1578,6 +1747,7 @@ function importData(event){
            gesetzter Schwellwert. Wuerde man das uebernehmen, erschiene sofort
            fuer fast jedes Produkt eine Nachbestell-Warnung. */
         if(data.schwelleMigriert !== true) altnullenAufNichtGesetzt(inventory);
+        if(typeof data.pin === "string") await storageSet("kasse:pin", data.pin);
         rangfolgeNeuBestimmen();
         await datensatzSichern();
         /* Nach dem Einlesen gilt die Umstellung als erledigt - egal aus welcher
