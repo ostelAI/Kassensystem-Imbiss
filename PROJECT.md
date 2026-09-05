@@ -122,10 +122,13 @@ liegen:
 - 📅 Wochenverlauf
 - der Tagesabschluss (er sitzt im Tagesumsatz-Fenster)
 
-**🏆 Tagesranking ist bewusst frei zugänglich** (so gewünscht, 05.09.2026). Es
-zeigt allerdings den Umsatz je Produkt – wer die Zeilen zusammenzählt, kommt auf
-den Tagesumsatz. Der Knopf "Tagesumsatz" im Ranking läuft über `mitPin()`, sonst
-wäre über diesen Umweg auch der Tagesabschluss offen gewesen.
+**🏆 Tagesranking ist bewusst frei zugänglich** (so gewünscht, 05.09.2026) und
+zeigt deshalb **nur Stückzahlen, keine Eurobeträge** – sonst liesse sich der
+Tagesumsatz aus den Einzelzeilen zusammenzählen. Gesteuert über den zweiten
+Parameter von `renderRankingRows(salesObj, mitBetraegen)`: im Tagesranking
+`false`, in der Tagesansicht des Wochenverlaufs `true`, weil die hinter der PIN
+liegt. Der Knopf "Tagesumsatz" im Ranking läuft über `mitPin()`, sonst wäre über
+diesen Umweg auch der Tagesabschluss offen gewesen.
 
 Verkaufen, Bons und Inventur bleiben frei bedienbar – die braucht sie im
 Betrieb, und dort steht kein Umsatz.

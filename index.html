@@ -1189,7 +1189,11 @@ async function resetDaily(){
   closeModal();
 }
 
-function renderRankingRows(salesObj){
+/* mitBetraegen steuert, ob der Umsatz je Produkt mit angezeigt wird.
+   Im Tagesranking bleibt er aus: Das ist ohne PIN erreichbar, und aus den
+   Einzelbetraegen liesse sich der Tagesumsatz zusammenzaehlen. In der
+   Tagesansicht des Wochenverlaufs ist er an - die liegt hinter der PIN. */
+function renderRankingRows(salesObj, mitBetraegen){
   const ranked = products
     .map(p=>({p, qty: salesObj[p.id]||0}))
     .filter(r=>r.qty>0)
@@ -1201,7 +1205,7 @@ function renderRankingRows(salesObj){
       <div class="pmr-emoji">${productIconHtml(r.p,26)}</div>
       <div class="pmr-info">
         <div class="pmr-name">${escapeHtml(r.p.name)}</div>
-        <div class="pmr-sub">${fmt(postenSumme(r.p.price, r.qty))} Umsatz</div>
+        ${mitBetraegen ? `<div class="pmr-sub">${fmt(postenSumme(r.p.price, r.qty))} Umsatz</div>` : ''}
       </div>
       <div style="font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:15px;">${r.qty}×</div>
     </div>
@@ -1215,7 +1219,7 @@ function showRankingModal(){
       <div class="modal">
         <button class="close-x" onclick="closeModal()">✕</button>
         <h2>🏆 Tagesranking</h2>
-        ${renderRankingRows(dailySales)}
+        ${renderRankingRows(dailySales, false)}
         <div class="modal-actions">
           <button class="btn-secondary" onclick="closeModal()">Schließen</button>
           <!-- Fuehrt zum Tagesumsatz und der bleibt hinter der PIN. Wer aus dem
@@ -1262,7 +1266,7 @@ function showDayDetail(index){
         <div class="numpad-display" style="text-align:center;">
           <div class="given">${fmt(d.total)}</div>
         </div>
-        ${renderRankingRows(d.sales)}
+        ${renderRankingRows(d.sales, true)}
         <div class="modal-actions">
           <button class="btn-secondary" onclick="showWeekModal()">Zurück</button>
         </div>
