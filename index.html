@@ -197,7 +197,7 @@
 
   <div id="board">
     <div id="topbar">
-      <div id="shop-title">🌭 Imbiss Kasse <span id="version-tag">v2.0.2</span></div>
+      <div id="shop-title">🌭 Imbiss Kasse <span id="version-tag"></span></div>
       <div style="display:flex;align-items:center;gap:8px;">
         <div id="daily" onclick="showDailyModal()">
           <div>
@@ -281,7 +281,21 @@ function saveTabs(){
   storageSet("kasse:active-tab", activeTabId);
 }
 
-function fmt(n){ return n.toFixed(2).replace(".",",") + " €"; }
+function fmt(n){ return sichereZahl(n, 0).toFixed(2).replace(".",",") + " €"; }
+
+/* Geldbetraege ueber Cent rechnen. Summiert man Fliesskommazahlen ueber einen
+   ganzen Tag, entstehen sonst Werte wie 123.45000000000002 - die Anzeige rundet
+   das zwar weg, der gespeicherte Tagesumsatz driftet aber mit. */
+function inCent(betrag){ return Math.round(sichereZahl(betrag, 0) * 100); }
+function ausCent(cent){ return cent / 100; }
+function geldSumme(){
+  let cent = 0;
+  for(const betrag of arguments) cent += inCent(betrag);
+  return ausCent(cent);
+}
+function postenSumme(einzelpreis, menge){
+  return ausCent(inCent(einzelpreis) * Math.round(sichereZahl(menge, 0)));
+}
 
 function storageGet(key, fallback){
   try{
@@ -349,6 +363,9 @@ async function init(){
   renderCart();
   updateDailyDisplay();
   updateInventoryBadge();
+  /* Versionsnummer aus der Konstanten setzen, damit sie nicht an zwei Stellen
+     von Hand gepflegt werden muss und auseinanderlaufen kann. */
+  document.getElementById("version-tag").textContent = "v" + APP_VERSION;
   updateClock();
   setInterval(updateClock, 30000);
 }
@@ -530,7 +547,7 @@ function renderCart(){
         line.innerHTML = `
           <div class="cl-qtybox"><span class="cl-qty" style="width:auto;padding:0 4px;font-weight:700;">${qty}×</span></div>
           <div class="cl-name">${p ? escapeHtml(p.name) : '(gelöschtes Produkt)'}</div>
-          <div class="cl-price">${p ? fmt(p.price*qty) : ''}</div>
+          <div class="cl-price">${p ? fmt(postenSumme(p.price, qty)) : ''}</div>
         `;
         wrap.appendChild(line);
       });
@@ -560,7 +577,7 @@ function renderCart(){
           <button class="cl-btn" onclick="increaseQty('${id}')">+</button>
         </div>
         <div class="cl-name">${escapeHtml(p.name)}</div>
-        <div class="cl-price">${fmt(p.price*qty)}</div>
+        <div class="cl-price">${fmt(postenSumme(p.price, qty))}</div>
       `;
       wrap.appendChild(line);
     });
@@ -572,13 +589,11 @@ function renderCart(){
 
 function getTotal(){
   const tab = getActiveTab();
-  return Object.keys(tab.items).reduce((sum,id)=>{
+  const cent = Object.keys(tab.items).reduce((summe,id)=>{
     const p = products.find(x=>x.id===id);
-    return p ? sum + p.price*tab.items[id] : sum;
+    return p ? summe + inCent(p.price) * tab.items[id] : summe;
   },0);
-}
-function getItemCount(){
-  return Object.values(getActiveTab().items).reduce((a,b)=>a+b,0);
+  return ausCent(cent);
 }
 
 function addToCart(id){
@@ -801,7 +816,7 @@ function datensatzPruefen(roh){
       categories: kategorien,
       supplies: material,
       inventory: sicheresLager(roh.inventory),
-      dayHistory: verlauf.slice(0, 60),
+      dayHistory: verlauf.slice(0, 400),
       dailyTotal: Math.max(0, sichereZahl(roh.dailyTotal, 0)),
       dailySales: sichereZaehler(roh.dailySales),
       totalSales: sichereZaehler(roh.totalSales),
@@ -901,7 +916,7 @@ function updatePayDisplay(){
 async function confirmPay(){
   const tab = getActiveTab();
   const total = getTotal();
-  dailyTotal += total;
+  dailyTotal = geldSumme(dailyTotal, total);
   Object.keys(tab.items).forEach(id=>{
     dailySales[id] = (dailySales[id]||0) + tab.items[id];
     totalSales[id] = (totalSales[id]||0) + tab.items[id];
@@ -987,7 +1002,10 @@ async function resetDaily(){
       total: dailyTotal,
       sales: {...dailySales}
     });
-    dayHistory = dayHistory.slice(0, 60);
+    /* Rund ein Jahr statt zwei Monate: Ein Imbiss-Stand laeuft saisonal, der
+     Vergleich mit dem Vorjahr ist damit ueberhaupt erst moeglich. Der Platz
+     dafuer ist zu vernachlaessigen - ein Tag sind ein paar hundert Byte. */
+  dayHistory = dayHistory.slice(0, 400);
     await storageSet("kasse:day-history", dayHistory);
   }
   dailyTotal = 0;
@@ -1014,7 +1032,7 @@ function renderRankingRows(salesObj){
       <div class="pmr-emoji">${productIconHtml(r.p,26)}</div>
       <div class="pmr-info">
         <div class="pmr-name">${escapeHtml(r.p.name)}</div>
-        <div class="pmr-sub">${fmt(r.p.price*r.qty)} Umsatz</div>
+        <div class="pmr-sub">${fmt(postenSumme(r.p.price, r.qty))} Umsatz</div>
       </div>
       <div style="font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:15px;">${r.qty}×</div>
     </div>
@@ -1131,8 +1149,20 @@ function updateInventoryBadge(){
   if(shopBtn) shopBtn.classList.toggle("alert", lowCount>0);
 }
 let invOpenSections = {}; // merkt sich pro Abschnitt, ob er aufgeklappt ist - bleibt über Re-Renders hinweg erhalten
+let invAbschnittsSchluessel = {}; // sectionId -> stabiler Schluessel
+
+/* Der Aufklapp-Zustand haengt am Namen des Abschnitts, nicht an seiner Position.
+   Frueher war "inv-2" der Schluessel - wurde eine Kategorie geloescht oder
+   verschoben, klappte danach die falsche auf. Die sectionId bleibt trotzdem
+   eine reine Positionsangabe, weil sie in ein onclick-Attribut geschrieben wird
+   und dort kein frei gewaehlter Text stehen darf. */
+function abschnittsSchluessel(sectionId, catName){
+  return String(sectionId).split("-")[0] + "|" + catName;
+}
 function renderCollapsibleSection(catName, countLabel, innerHtml, sectionId, defaultOpen){
-  const isOpen = Object.prototype.hasOwnProperty.call(invOpenSections, sectionId) ? invOpenSections[sectionId] : defaultOpen;
+  const schluessel = abschnittsSchluessel(sectionId, catName);
+  invAbschnittsSchluessel[sectionId] = schluessel;
+  const isOpen = Object.prototype.hasOwnProperty.call(invOpenSections, schluessel) ? invOpenSections[schluessel] : defaultOpen;
   return `
     <div class="inv-cat-section">
       <div class="inv-cat-header" onclick="toggleSection('${sectionId}')">
@@ -1152,7 +1182,7 @@ function toggleSection(sectionId){
   const isOpen = body.style.display !== "none";
   body.style.display = isOpen ? "none" : "block";
   chev.textContent = isOpen ? "▸" : "▾";
-  invOpenSections[sectionId] = !isOpen;
+  invOpenSections[invAbschnittsSchluessel[sectionId] || sectionId] = !isOpen;
 }
 
 function showInventoryModal(){
