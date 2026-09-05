@@ -319,21 +319,28 @@ function showToast(message){
 }
 
 async function init(){
-  products = await storageGet("kasse:products", DEFAULT_PRODUCTS);
-  categories = await storageGet("kasse:categories", DEFAULT_CATEGORIES);
-  dailyTotal = await storageGet("kasse:daily-total", 0);
-  dailySales = await storageGet("kasse:daily-sales", {});
-  totalSales = await storageGet("kasse:total-sales", {});
-  inventory = await storageGet("kasse:inventory", {});
-  supplies = await storageGet("kasse:supplies", []);
-  dayHistory = await storageGet("kasse:day-history", []);
-  lastCompletedOrder = await storageGet("kasse:last-completed-order", null);
-  tabs = await storageGet("kasse:open-tabs", [{id:"default", name:"Schnellverkauf", items:{}}]);
-  if(!tabs.find(t=>t.id==="default")){
-    tabs.unshift({id:"default", name:"Schnellverkauf", items:{}});
+  const roh = {
+    products:          await storageGet("kasse:products", DEFAULT_PRODUCTS),
+    categories:        await storageGet("kasse:categories", DEFAULT_CATEGORIES),
+    supplies:          await storageGet("kasse:supplies", []),
+    inventory:         await storageGet("kasse:inventory", {}),
+    dayHistory:        await storageGet("kasse:day-history", []),
+    dailyTotal:        await storageGet("kasse:daily-total", 0),
+    dailySales:        await storageGet("kasse:daily-sales", {}),
+    totalSales:        await storageGet("kasse:total-sales", {}),
+    tabs:              await storageGet("kasse:open-tabs", [{id:"default", name:"Schnellverkauf", items:{}}]),
+    activeTabId:       await storageGet("kasse:active-tab", "default"),
+    lastCompletedOrder:await storageGet("kasse:last-completed-order", null)
+  };
+  /* Auch der bereits gespeicherte Stand wird geprueft, nicht nur eine frisch
+     eingelesene Datei. So heilt ein einmal entstandener Schaden beim naechsten
+     Start von selbst aus, statt die App dauerhaft unbenutzbar zu lassen. */
+  const geprueft = datensatzPruefen(roh);
+  datensatzUebernehmen(geprueft.daten);
+  if(geprueft.verworfen > 0){
+    await datensatzSichern();
+    showToast(geprueft.verworfen + " beschädigte Einträge wurden entfernt");
   }
-  activeTabId = await storageGet("kasse:active-tab", "default");
-  if(!tabs.find(t=>t.id===activeTabId)) activeTabId = "default";
   await schwellenwerteUmstellen();
   rangfolgeNeuBestimmen();
   renderCategories();
@@ -606,15 +613,225 @@ function clearCart(){
   renderCart();
 }
 
+/* ---------- Daten pruefen ----------
+   Alles, was aus einer Sicherungsdatei oder aus dem localStorage kommt, ist
+   erstmal unbekannt. Diese Bausteine bringen jeden Wert in eine Form, mit der
+   die App sicher umgehen kann - statt darauf zu vertrauen, dass er stimmt. */
+const ID_MUSTER = /^[A-Za-z0-9_-]{1,64}$/;
+function neueId(praefix){
+  return praefix + Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+}
+function sichereId(wert, praefix){
+  const t = String(wert === null || wert === undefined ? "" : wert);
+  /* Kennungen landen in onclick-Attributen. Ein Apostroph darin waere ein
+     Ausbruch aus der Zeichenkette, deshalb nur unverfaengliche Zeichen. */
+  return ID_MUSTER.test(t) ? t : neueId(praefix);
+}
+function sichererText(wert, maxLaenge){
+  return String(wert === null || wert === undefined ? "" : wert).trim().slice(0, maxLaenge || 80);
+}
+function sichereZahl(wert, ersatz){
+  const n = typeof wert === "number" ? wert : parseFloat(wert);
+  return Number.isFinite(n) ? n : ersatz;
+}
+function sicheresBild(wert){
+  const t = typeof wert === "string" ? wert : "";
+  /* Nur das Format, das die App selbst erzeugt (Canvas -> Data-URL). */
+  return /^data:image\/(png|jpeg|jpg|gif|webp);base64,[A-Za-z0-9+/=\s]+$/.test(t) && t.length < 700000 ? t : null;
+}
+function sicheresIcon(wert, ersatz){
+  const t = String(wert === null || wert === undefined ? "" : wert).trim();
+  return (t && [...t].length <= 4) ? t : ersatz;
+}
+function sicheresLager(roh){
+  const sauber = {};
+  Object.keys(roh && typeof roh === "object" ? roh : {}).forEach(id=>{
+    const e = roh[id];
+    if(!e || typeof e !== "object") return;
+    /* Unbrauchbare Schluessel verwerfen statt umbenennen: Eine neue Kennung
+       zeigt auf kein Produkt und kaeme bei jedem Start erneut hinzu. */
+    if(!ID_MUSTER.test(id)) return;
+    const kennung = id;
+    const schwelle = (e.threshold === null || e.threshold === undefined || e.threshold === "")
+      ? null : sichereZahl(e.threshold, null);
+    sauber[kennung] = {
+      stock: Math.max(0, sichereZahl(e.stock, 0)),
+      target: sichereZahl(e.target, 0),
+      threshold: schwelle
+    };
+  });
+  return sauber;
+}
+function sichereZaehler(roh){
+  const sauber = {};
+  Object.keys(roh && typeof roh === "object" ? roh : {}).forEach(id=>{
+    if(!ID_MUSTER.test(id)) return;          // siehe sicheresLager()
+    const menge = sichereZahl(roh[id], 0);
+    if(menge > 0) sauber[id] = menge;
+  });
+  return sauber;
+}
+function sichereBons(roh){
+  const liste = Array.isArray(roh) ? roh : [];
+  const bons = [];
+  liste.forEach(t=>{
+    if(!t || typeof t !== "object") return;
+    const name = sichererText(t.name, 40);
+    if(!name) return;
+    /* "default" ist der feste Schnellverkauf-Bon und darf seine Kennung behalten. */
+    const id = t.id === "default" ? "default" : sichereId(t.id, "t");
+    if(bons.some(b=>b.id === id)) return;
+    bons.push({ id, name, items: sichereZaehler(t.items) });
+  });
+  if(!bons.some(b=>b.id === "default")){
+    bons.unshift({id:"default", name:"Schnellverkauf", items:{}});
+  }
+  return bons;
+}
+
+/* Bringt einen kompletten Datensatz in einen benutzbaren Zustand und meldet,
+   wie viele Eintraege dabei verworfen werden mussten. Wird sowohl beim Start
+   als auch beim Einlesen einer Sicherung verwendet - damit ein bereits
+   gespeicherter Schaden beim naechsten Start von selbst ausheilt. */
+/* Uebertraegt einen geprueften Datensatz in die laufende App. */
+function datensatzUebernehmen(d){
+  products = d.products;
+  categories = d.categories;
+  supplies = d.supplies;
+  inventory = d.inventory;
+  dayHistory = d.dayHistory;
+  dailyTotal = d.dailyTotal;
+  dailySales = d.dailySales;
+  totalSales = d.totalSales;
+  tabs = d.tabs;
+  activeTabId = d.activeTabId;
+  lastCompletedOrder = d.lastCompletedOrder;
+}
+
+/* Schreibt den kompletten aktuellen Stand zurueck. */
+async function datensatzSichern(){
+  await storageSet("kasse:products", products);
+  await storageSet("kasse:categories", categories);
+  await storageSet("kasse:supplies", supplies);
+  await storageSet("kasse:inventory", inventory);
+  await storageSet("kasse:day-history", dayHistory);
+  await storageSet("kasse:daily-total", dailyTotal);
+  await storageSet("kasse:daily-sales", dailySales);
+  await storageSet("kasse:total-sales", totalSales);
+  await storageSet("kasse:last-completed-order", lastCompletedOrder);
+  saveTabs();
+}
+
+function datensatzPruefen(roh){
+  let verworfen = 0;
+
+  const kategorien = [];
+  (Array.isArray(roh.categories) ? roh.categories : []).forEach(c=>{
+    const name = sichererText(c, 40);
+    if(name && !kategorien.includes(name)) kategorien.push(name);
+  });
+  if(kategorien.length === 0) kategorien.push(...DEFAULT_CATEGORIES);
+
+  const produkte = [];
+  const vergeben = new Set();
+  (Array.isArray(roh.products) ? roh.products : []).forEach(pr=>{
+    if(!pr || typeof pr !== "object"){ verworfen++; return; }
+    const name = sichererText(pr.name, 60);
+    const preis = sichereZahl(pr.price, null);
+    /* Ohne Name oder Preis ist ein Produkt nicht verkaeufbar - und ein
+       fehlender Preis liess frueher die Anzeige abstuerzen. */
+    if(!name || preis === null || preis < 0){ verworfen++; return; }
+    let id = sichereId(pr.id, "p");
+    while(vergeben.has(id)) id = neueId("p");
+    vergeben.add(id);
+    produkte.push({
+      id, name,
+      price: preis,
+      category: kategorien.includes(sichererText(pr.category, 40)) ? sichererText(pr.category, 40) : "Sonstiges",
+      /* Faellt ein Produkt auf "Sonstiges" zurueck, muss es die Kategorie auch
+         geben - aber nur dann. Sonst erschiene sie unaufgefordert in der Liste. */
+      emoji: sicheresIcon(pr.emoji, EMOJI_CHOICES[0]),
+      image: sicheresBild(pr.image)
+    });
+  });
+
+  if(produkte.some(pr=>pr.category === "Sonstiges") && !kategorien.includes("Sonstiges")){
+    kategorien.push("Sonstiges");
+  }
+
+  const material = [];
+  (Array.isArray(roh.supplies) ? roh.supplies : []).forEach(v=>{
+    if(!v || typeof v !== "object"){ verworfen++; return; }
+    const name = sichererText(v.name, 60);
+    if(!name){ verworfen++; return; }
+    let id = sichereId(v.id, "s");
+    while(vergeben.has(id)) id = neueId("s");
+    vergeben.add(id);
+    material.push({ id, name, emoji: sicheresIcon(v.emoji, "\u{1F9F4}") });
+  });
+
+  const verlauf = [];
+  (Array.isArray(roh.dayHistory) ? roh.dayHistory : []).forEach(d=>{
+    if(!d || typeof d !== "object"){ verworfen++; return; }
+    const bezeichnung = sichererText(d.label, 40);
+    if(!bezeichnung){ verworfen++; return; }
+    verlauf.push({
+      date: sichererText(d.date, 10),
+      label: bezeichnung,
+      total: sichereZahl(d.total, 0),
+      sales: sichereZaehler(d.sales)
+    });
+  });
+
+  const bons = sichereBons(roh.tabs);
+  let letzteBestellung = null;
+  if(roh.lastCompletedOrder && typeof roh.lastCompletedOrder === "object"){
+    letzteBestellung = {
+      items: sichereZaehler(roh.lastCompletedOrder.items),
+      total: sichereZahl(roh.lastCompletedOrder.total, 0),
+      tabName: sichererText(roh.lastCompletedOrder.tabName, 40),
+      completedAt: sichererText(roh.lastCompletedOrder.completedAt, 30)
+    };
+  }
+
+  return {
+    verworfen,
+    daten: {
+      products: produkte,
+      categories: kategorien,
+      supplies: material,
+      inventory: sicheresLager(roh.inventory),
+      dayHistory: verlauf.slice(0, 60),
+      dailyTotal: Math.max(0, sichereZahl(roh.dailyTotal, 0)),
+      dailySales: sichereZaehler(roh.dailySales),
+      totalSales: sichereZaehler(roh.totalSales),
+      tabs: bons,
+      activeTabId: bons.some(b=>b.id === roh.activeTabId) ? roh.activeTabId : "default",
+      lastCompletedOrder: letzteBestellung
+    }
+  };
+}
+
 function productIconHtml(p, size){
   size = size || 22;
-  if(p.image){
-    return `<img src="${p.image}" alt="" style="width:${size}px;height:${size}px;object-fit:cover;border-radius:${Math.round(size/4)}px;flex-shrink:0;display:inline-block;vertical-align:middle;">`;
+  /* Nur selbst erzeugte Bild-Daten zulassen. Ein beliebiger Wert aus einer
+     Sicherungsdatei koennte sonst aus dem src-Attribut ausbrechen. */
+  const bild = sicheresBild(p.image);
+  if(bild){
+    return `<img src="${escapeHtml(bild)}" alt="" style="width:${size}px;height:${size}px;object-fit:cover;border-radius:${Math.round(size/4)}px;flex-shrink:0;display:inline-block;vertical-align:middle;">`;
   }
-  return p.emoji;
+  return escapeHtml(sicheresIcon(p.emoji, "\u2b50"));
 }
+/* Ersetzt auch Anfuehrungszeichen - sonst schuetzt die Funktion zwar Text,
+   aber keine Attributwerte wie src="..." oder value="...". Genau daran hing
+   eine Luecke: Ein " im Wert brach das Attribut auf. */
 function escapeHtml(s){
-  const d = document.createElement("div"); d.textContent = s; return d.innerHTML;
+  return String(s === null || s === undefined ? "" : s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 /* ---------- Zahlung ---------- */
@@ -980,7 +1197,7 @@ function showInventoryModal(){
     return `
       <div class="inv-row${low ? ' low':''}" id="invrow-${s.id}">
         <div class="inv-top">
-          <span style="font-size:18px;">${s.emoji}</span>
+          <span style="font-size:18px;">${escapeHtml(sicheresIcon(s.emoji, "\u{1F9F4}"))}</span>
           <div class="inv-name">${escapeHtml(s.name)}</div>
           <span class="inv-warn" id="warn-${s.id}" style="display:${low ? '' : 'none'};">⚠ Nachbestellen</span>
           <button class="icon-btn" style="width:26px;height:26px;font-size:12px;flex-shrink:0;" onclick="openSupplyForm('${s.id}')">✎</button>
@@ -1146,7 +1363,7 @@ function showShoppingListModal(){
           <div class="inv-top">
             <span style="font-size:18px;">${productIconHtml(p,20)}</span>
             <div class="inv-name">${escapeHtml(p.name)}</div>
-            <span class="inv-warn">Ist ${inv.stock} &middot; Warnen ab ${inv.threshold}</span>
+            <span class="inv-warn">Ist ${sichereZahl(inv.stock, 0)} &middot; Warnen ab ${sichereZahl(inv.threshold, 0)}</span>
           </div>
           <div class="inv-restock">
             <input type="number" id="shop-restock-${p.id}" placeholder="Menge gekauft">
@@ -1165,9 +1382,9 @@ function showShoppingListModal(){
       return `
         <div class="inv-row low" id="shoprow-${s.id}">
           <div class="inv-top">
-            <span style="font-size:18px;">${s.emoji}</span>
+            <span style="font-size:18px;">${escapeHtml(sicheresIcon(s.emoji, "\u{1F9F4}"))}</span>
             <div class="inv-name">${escapeHtml(s.name)}</div>
-            <span class="inv-warn">Ist ${inv.stock} &middot; Warnen ab ${inv.threshold}</span>
+            <span class="inv-warn">Ist ${sichereZahl(inv.stock, 0)} &middot; Warnen ab ${sichereZahl(inv.threshold, 0)}</span>
           </div>
           <div class="inv-restock">
             <input type="number" id="shop-restock-${s.id}" placeholder="Menge gekauft">
@@ -1243,10 +1460,10 @@ function renderManageModal(){
     `).join("");
     return `<div style="font-size:12px;color:var(--mustard);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin:14px 0 2px;">${escapeHtml(cat)}</div>${itemRows}`;
   }).join("");
-  const chips = categories.map(c=>`
+  const chips = categories.map((c,i)=>`
     <span style="display:inline-flex;align-items:center;gap:6px;background:var(--panel-2);border:1px solid #3a3229;border-radius:999px;padding:6px 8px 6px 12px;font-size:13px;margin:0 6px 6px 0;">
       ${escapeHtml(c)}
-      <button onclick="deleteCategory('${escapeHtml(c).replace(/'/g,"\\'")}')" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:14px;line-height:1;padding:0 2px;">✕</button>
+      <button onclick="deleteCategory(${i})" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:14px;line-height:1;padding:0 2px;">✕</button>
     </span>
   `).join("");
   modal.innerHTML = `
@@ -1303,49 +1520,40 @@ function importData(event){
     let data;
     try{ data = JSON.parse(reader.result); }
     catch(e){ alert("Diese Datei ist keine gültige Sicherungsdatei."); return; }
-    if(!Array.isArray(data.products) || !Array.isArray(data.categories)){
+    if(!data || typeof data !== "object" || !Array.isArray(data.products) || !Array.isArray(data.categories)){
       alert("Diese Datei enthält keine gültigen Kassendaten.");
       return;
     }
+
+    /* Erst vollstaendig pruefen, dann fragen, dann speichern. Frueher wurde
+       zuerst gespeichert und danach angezeigt - eine beschaedigte Datei konnte
+       die App dadurch unbenutzbar machen, und weil "Produkte verwalten" an
+       derselben Stelle abstuerzte, kam man an den Import nicht mehr heran. */
+    const geprueft = datensatzPruefen(data);
+    if(geprueft.daten.products.length === 0){
+      alert("Diese Datei enthält kein einziges verwendbares Produkt.\n\nEs wurde nichts geändert.");
+      return;
+    }
+    const hinweis = geprueft.verworfen > 0
+      ? `<br><br>${geprueft.verworfen} Eintrag/Einträge in der Datei sind beschädigt und werden übersprungen.`
+      : "";
     showConfirm(
       "Sicherung einlesen?",
-      `Es werden ${data.products.length} Produkte und ${data.categories.length} Kategorien geladen${Array.isArray(data.supplies) ? ' (inkl. Verbrauchsmaterial, Lagerbestand, Wochenverlauf und offener Bons)' : ''}. Die aktuellen Daten auf diesem Gerät werden dabei überschrieben.`,
+      `Es werden ${geprueft.daten.products.length} Produkte und ${geprueft.daten.categories.length} Kategorien geladen, dazu Verbrauchsmaterial, Lagerbestand, Wochenverlauf und offene Bons. Die aktuellen Daten auf diesem Gerät werden dabei überschrieben.${hinweis}`,
       "Überschreiben",
       async ()=>{
-        products = data.products;
-        categories = data.categories;
-        if(Array.isArray(data.supplies)) supplies = data.supplies;
-        if(data.inventory && typeof data.inventory === "object"){
-          inventory = data.inventory;
-          /* Sicherung aus einer Fassung vor der Schwellwert-Umstellung: Dort ist
-             jedes "threshold: 0" ein automatischer Startwert, kein bewusst
-             gesetzter Schwellwert. Wuerde man das uebernehmen, erschiene sofort
-             fuer fast jedes Produkt eine Nachbestell-Warnung. */
-          if(data.schwelleMigriert !== true) altnullenAufNichtGesetzt(inventory);
-        }
-        if(Array.isArray(data.dayHistory)) dayHistory = data.dayHistory;
-        if(typeof data.dailyTotal === "number") dailyTotal = data.dailyTotal;
-        if(data.dailySales && typeof data.dailySales === "object") dailySales = data.dailySales;
-        if(data.totalSales && typeof data.totalSales === "object") totalSales = data.totalSales;
-        if(Array.isArray(data.tabs) && data.tabs.length>0) tabs = data.tabs;
-        if(!tabs.find(t=>t.id==="default")) tabs.unshift({id:"default", name:"Schnellverkauf", items:{}});
-        activeTabId = (data.activeTabId && tabs.find(t=>t.id===data.activeTabId)) ? data.activeTabId : "default";
-        if(data.lastCompletedOrder && typeof data.lastCompletedOrder === "object") lastCompletedOrder = data.lastCompletedOrder;
+        datensatzUebernehmen(geprueft.daten);
+        /* Sicherung aus einer Fassung vor der Schwellwert-Umstellung: Dort ist
+           jedes "threshold: 0" ein automatischer Startwert, kein bewusst
+           gesetzter Schwellwert. Wuerde man das uebernehmen, erschiene sofort
+           fuer fast jedes Produkt eine Nachbestell-Warnung. */
+        if(data.schwelleMigriert !== true) altnullenAufNichtGesetzt(inventory);
         rangfolgeNeuBestimmen();
-        await storageSet("kasse:products", products);
-        await storageSet("kasse:categories", categories);
-        await storageSet("kasse:supplies", supplies);
-        await storageSet("kasse:inventory", inventory);
-        await storageSet("kasse:day-history", dayHistory);
-        await storageSet("kasse:daily-total", dailyTotal);
-        await storageSet("kasse:daily-sales", dailySales);
-        await storageSet("kasse:total-sales", totalSales);
-        await storageSet("kasse:last-completed-order", lastCompletedOrder);
+        await datensatzSichern();
         /* Nach dem Einlesen gilt die Umstellung als erledigt - egal aus welcher
            Fassung die Datei kam. Sonst liefe sie beim naechsten Start erneut und
            wuerde bewusst gesetzte Nullen wieder abschalten. */
         await storageSet("kasse:schwelle-migriert-v1", true);
-        saveTabs();
         renderCategories();
         renderGrid();
         renderManageModal();
@@ -1369,7 +1577,11 @@ async function addCategory(){
   renderCategories();
   renderManageModal();
 }
-function deleteCategory(cat){
+function deleteCategory(index){
+  /* Bewusst die Position statt des Namens: Ein Name mit Anfuehrungszeichen
+     wuerde sonst das onclick-Attribut aufbrechen. */
+  const cat = categories[index];
+  if(cat === undefined) return;
   const inUse = products.filter(p=>p.category===cat).length;
   const msg = inUse>0
     ? `Die Kategorie <span class="confirm-name">${escapeHtml(cat)}</span> wird von ${inUse} Produkt(en) verwendet. Diese werden zu "Sonstiges" verschoben. Kategorie wirklich löschen?`
@@ -1450,7 +1662,7 @@ function renderPhotoPreview(){
   const wrap = document.getElementById("photo-preview");
   if(!wrap) return;
   wrap.innerHTML = selectedPhoto
-    ? `<img src="${selectedPhoto}" style="width:64px;height:64px;object-fit:cover;border-radius:10px;border:1px solid #4a4038;">`
+    ? `<img src="${escapeHtml(sicheresBild(selectedPhoto) || "")}" style="width:64px;height:64px;object-fit:cover;border-radius:10px;border:1px solid #4a4038;">`
     : `<div style="color:var(--dim);font-size:12px;">Kein Foto ausgewählt – Icon wird verwendet.</div>`;
 }
 function handlePhotoSelect(event){

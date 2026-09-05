@@ -112,6 +112,45 @@ und setzt den Merker – die danach importierten Altdaten würden also nicht meh
 umgestellt und lösten für fast jedes Produkt eine Warnung aus. Nach jedem Import
 gilt die Umstellung als erledigt.
 
+## Datenprüfung (`datensatzPruefen`)
+Alles, was aus dem `localStorage` oder aus einer Sicherungsdatei kommt, gilt als
+unbekannt und wird durch `datensatzPruefen()` normalisiert, bevor die App damit
+arbeitet. Die Funktion läuft an **zwei** Stellen:
+
+- **beim Start** (`init()`) – dadurch heilt ein bereits gespeicherter Schaden von
+  selbst aus, statt die App dauerhaft unbenutzbar zu lassen
+- **beim Import** – dort wird geprüft, **bevor** gespeichert wird
+
+Früher wurde beim Import zuerst gespeichert und danach angezeigt. Eine Datei mit
+einem Produkt ohne Preis brachte damit `fmt(undefined)` zum Absturz, das Raster
+blieb leer, und weil "Produkte verwalten" an derselben Stelle abstürzte, kam man
+an den Import nicht mehr heran – auch nach einem Neustart nicht.
+
+Regeln: Produkte brauchen Name und eine Zahl als Preis (0 ist erlaubt), sonst
+werden sie übersprungen und im Bestätigungsdialog gemeldet. Kennungen müssen
+`[A-Za-z0-9_-]{1,64}` erfüllen, weil sie in `onclick`-Attributen landen; passt
+eine Kennung nicht, bekommt der Eintrag eine neue. Schlüssel in `inventory`,
+`dailySales` und `totalSales` werden dagegen **verworfen** statt umbenannt – eine
+neue Kennung zeigt auf kein Produkt und käme bei jedem Start erneut hinzu.
+Bilder nur als `data:image/…;base64`, Icons höchstens vier Zeichen. Bons ohne
+`items` bekommen ein leeres Objekt, statt beim Zeichnen abzustürzen.
+
+**Wichtig:** Echte Daten dürfen dabei nicht verändert werden. `"Sonstiges"` wird
+nur angelegt, wenn wirklich ein Produkt dorthin zurückfällt.
+
+## Sicherheit: Werte aus Daten im HTML
+`escapeHtml()` ersetzt auch `"` und `'` – vorher nur `& < >`, wodurch
+Attributwerte wie `src="…"` ungeschützt waren.
+
+Für `onclick`-Attribute reicht Escaping grundsätzlich **nicht**: Der Browser
+wandelt Entitäten im Attribut zurück, bevor der JavaScript-Teil gelesen wird. Ein
+`&#39;` wird also wieder zu `'` und bricht die Zeichenkette auf. Deshalb steht
+dort nie ein vom Benutzer bestimmter Text:
+
+- `deleteCategory(index)` bekommt die **Position**, nicht den Kategorienamen
+- alle anderen Handler bekommen Kennungen, die die Datenprüfung auf ein
+  unverfängliches Zeichenrepertoire begrenzt hat
+
 ## Feature-Überblick (Stand v2.0.2)
 - **Dashboard**: Kategorie-Tabs oben, Produktraster. "Alle" sortiert nach
   Gesamt-Verkaufsranking, einzelne Kategorien alphabetisch. Die Reihenfolge
