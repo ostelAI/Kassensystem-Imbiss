@@ -1935,7 +1935,9 @@ async function saveProduct(){
     const p = products.find(x=>x.id===editingProductId);
     p.name = name; p.price = price; p.emoji = emoji; p.category = category; p.image = selectedPhoto;
   } else {
-    products.push({id:"p"+Date.now(), name, price, emoji, category, image: selectedPhoto});
+    /* Feldreihenfolge wie in datensatzPruefen(), damit zwei Sicherungsdateien
+       desselben Standes auch als Text identisch sind und sich vergleichen lassen. */
+    products.push({id:"p"+Date.now(), name, price, category, emoji, image: selectedPhoto});
   }
   editingProductId = null;
   await storageSet("kasse:products", products);
