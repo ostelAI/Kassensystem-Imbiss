@@ -116,12 +116,16 @@ gilt die Umstellung als erledigt.
 ## PIN für die Umsatzansichten
 Am Stand schaut der halbe Tresen auf den Bildschirm. Der Tagesumsatz steht
 deshalb nicht mehr offen in der Kopfzeile, sondern als `•••`. Hinter der PIN
-liegen **alle** Ansichten mit Umsatzbezug:
+liegen:
 
 - der Betrag in der Kopfzeile
-- 🏆 Tagesranking
 - 📅 Wochenverlauf
 - der Tagesabschluss (er sitzt im Tagesumsatz-Fenster)
+
+**🏆 Tagesranking ist bewusst frei zugänglich** (so gewünscht, 05.09.2026). Es
+zeigt allerdings den Umsatz je Produkt – wer die Zeilen zusammenzählt, kommt auf
+den Tagesumsatz. Der Knopf "Tagesumsatz" im Ranking läuft über `mitPin()`, sonst
+wäre über diesen Umweg auch der Tagesabschluss offen gewesen.
 
 Verkaufen, Bons und Inventur bleiben frei bedienbar – die braucht sie im
 Betrieb, und dort steht kein Umsatz.
@@ -197,7 +201,13 @@ dort nie ein vom Benutzer bestimmter Text:
   der Produktbestand ändert. Früher wurde nach jedem Verkauf neu sortiert –
   dadurch verschoben sich die Kacheln mitten im Betrieb unter dem Finger.
   Zeigt Foto statt Emoji, falls eins hinterlegt ist.
-- **Bon** (rechts, dauerhaft sichtbar, kompakt): Tab-Leiste über dem Bon –
+- **Bon** (rechts, dauerhaft sichtbar, kompakt): Bon-Leiste über dem Bon, die
+  Chips **brechen um** und scrollen bei Bedarf senkrecht (`#tab-row`).
+  **"+ Gast" steht außerhalb dieser Leiste** (`#tab-add`) und ist dadurch immer
+  sichtbar. Vorher lief die Leiste seitlich: Sobald der erste Verkauf
+  abgeschlossen war, schob der Chip "Letzte Bestellung" den Knopf aus dem Bild –
+  und dass man dort wischen kann, sieht man der Leiste nicht an. Die Gast-Bons
+  waren damit praktisch unauffindbar. Reihenfolge –
   Reihenfolge: 🔴 Schnellverkauf → 🔵 Letzte Bestellung (falls vorhanden) →
   Gäste. Gast-Chips pulsieren pink, sobald Artikel drin sind, werden nach
   Bezahlung wieder grau (Tab bleibt aber bestehen). "+ Gast" legt neuen
