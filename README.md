@@ -117,8 +117,9 @@ bucht einen halben Tag in eine Kasse, die niemand mehr ansieht.
 ## PIN
 
 Alles mit Umsatzbezug liegt hinter einer vierstelligen PIN: der Betrag in der
-Kopfzeile (sonst `•••`), Tagesranking, Wochenverlauf und der Tagesabschluss.
-Verkaufen, Bons und Inventur bleiben frei bedienbar.
+Kopfzeile (sonst `•••`), der Wochenverlauf und der Tagesabschluss. Verkaufen,
+Bons, Inventur und das Tagesranking bleiben frei bedienbar – das Ranking zeigt
+dafür nur Stückzahlen, keine Eurobeträge.
 
 Die PIN wird beim ersten Zugriff festgelegt. Danach bleibt es zwei Minuten
 entsperrt, dann verdeckt sich der Betrag von selbst wieder. Vergessen? →
