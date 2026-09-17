@@ -39,6 +39,7 @@ index.html      die komplette App
 sw.js           Service Worker (Offline-Betrieb)
 manifest.json   PWA-Manifest
 icon-*.png      App-Symbole
+coc-logo.png    Logo für "powered by COC" in der Kopfzeile
 PROJECT.md      technische Notizen: Datenhaltung, Entscheidungen, Fallstricke
 ```
 

@@ -15,6 +15,9 @@ kein Framework, kein Backend). Läuft komplett im Browser, Daten liegen in
 - `manifest.json` – PWA-Manifest (Name, Icons, `display: standalone`)
 - `icon-32.png`, `icon-180.png`, `icon-192.png`, `icon-512.png` – App-Icons,
   generiert aus dem vom Nutzer bereitgestellten Logo
+- `coc-logo.png` – COC-Logo (64 × 64) für "powered by COC" unter dem Titel.
+  Dieselbe Datei wie in der Moshers-Kasse. Steht in der Dateiliste von `sw.js`,
+  sonst fehlt es offline.
 
 Diese Dateien liegen zusammen im Root-Verzeichnis eines Netlify-Sites-Deploys
 (kein Unterordner). `index.html` verlinkt Manifest und Icons per `<link>`-Tags
@@ -87,6 +90,38 @@ Adresswechsel verloren.
 und damit an der URL hängen, ist "⬇ Sichern" auf der alten und
 "⬆ Wiederherstellen" auf der neuen Adresse der einzige Weg, den Datenbestand
 mitzunehmen.
+
+## Gestaltung (seit 17.09.2026)
+Bordeaux statt Dunkelbraun, Weiß statt Senfgelb, moderne Schriften statt
+Schreibmaschinen-Optik. Alles hängt an den Variablen in `:root` – wer Farben
+oder Schriften ändert, sollte es dort tun, nicht an einzelnen Stellen.
+
+**Farben**
+- `--bg` `#6b1a2c` Bordeaux-Grund · `--panel-2` Kacheln, etwas heller, damit sie
+  als antippbare Flächen hervortreten · `--panel` Fenster, dunkler
+- `--linie`, `--trennlinie`, `--flaeche-aktiv` ersetzen die früher an rund 20
+  Stellen fest eingetragenen Brauntöne. Neue Rahmen bitte über diese Variablen.
+- `--mustard` ist **Weiß**. Der Name stammt aus der ersten Fassung und ist bewusst
+  geblieben, weil die Moshers-Kasse dieselben Variablennamen verwendet.
+- `--warn-text` (helles Korallrot) und `--ok-text` (helles Grün) für Hinweise auf
+  dunklem Rot. Paprika-Rot und das dunkle Basilikum-Grün wären dort kaum lesbar –
+  betrifft "⚠ Nachbestellen", "Falsche PIN" und das Rückgeld im Kassenfenster.
+- Hinweise in der Kopfzeile (Zähler, pulsierender Einkaufslisten-Knopf) und die
+  Meldung unten sind **weiß** statt rot – Rot geht auf Bordeaux unter.
+- Der Bon bleibt Papier-Creme mit dunkler Schrift.
+
+**Schriften**
+- `--schrift-ware` **Barlow Semi Condensed** – Warennamen auf den Kacheln und im
+  Bon. Schmal geschnitten, dadurch passen auch längere Namen in eine Zeile.
+- `--schrift-zahl` **Barlow** mit `font-variant-numeric: tabular-nums` – alle
+  Beträge. Gleich breite Ziffern, damit Beträge sauber untereinanderstehen.
+  Ersetzt IBM Plex Mono.
+- `--schrift-ui` **Barlow** – übrige Oberfläche. Ersetzt Work Sans.
+- `--schrift-titel` **Archivo Black** – Titel und Fensterüberschriften, unverändert.
+- `button, input, select, textarea { font-family: inherit }` – ohne das liefen
+  viele Knöpfe in der Windows-Systemschrift.
+
+Die "Night Warrior"-Schrift der Moshers-Kasse wurde bewusst nicht übernommen.
 
 ## Schwellwerte ("Warnen ab") – Bedeutungsänderung
 Früher galt `threshold: 0` als "nicht gesetzt", weil 0 zugleich der automatisch

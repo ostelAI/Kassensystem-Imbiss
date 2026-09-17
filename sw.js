@@ -14,8 +14,8 @@
    wie bisher beim nächsten Öffnen automatisch an. Nur wenn das Netz fehlt
    oder zu langsam ist, springt die gespeicherte Fassung ein. */
 
-const CACHE_APP   = "imbiss-kasse-app-v1";
-const CACHE_FONTS = "imbiss-kasse-fonts-v1";
+const CACHE_APP   = "imbiss-kasse-app-v2";
+const CACHE_FONTS = "imbiss-kasse-fonts-v2";
 const AKTUELLE_CACHES = [CACHE_APP, CACHE_FONTS];
 
 /* Dateien, die für den Start der App nötig sind. */
@@ -26,7 +26,8 @@ const APP_DATEIEN = [
   "./icon-32.png",
   "./icon-180.png",
   "./icon-192.png",
-  "./icon-512.png"
+  "./icon-512.png",
+  "./coc-logo.png"
 ];
 
 /* Wie lange auf das Netz gewartet wird, bevor die gespeicherte Fassung
