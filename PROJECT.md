@@ -97,8 +97,16 @@ Schreibmaschinen-Optik. Alles hängt an den Variablen in `:root` – wer Farben
 oder Schriften ändert, sollte es dort tun, nicht an einzelnen Stellen.
 
 **Farben**
-- `--bg` `#6b1a2c` Bordeaux-Grund · `--panel-2` Kacheln, etwas heller, damit sie
-  als antippbare Flächen hervortreten · `--panel` Fenster, dunkler
+- `--bg` `#6b1a2c` Bordeaux-Grund · `--panel` Fenster, dunkler · `--panel-2`
+  Knöpfe, Kategorie-Pillen und **alle Eingabefelder** in den Fenstern
+- `--kachel` `#45101c` mit `--kachel-rand` (heller, halbtransparenter Rand) nur
+  für die **Produktkacheln** – dunkler als der Grund, damit sie sich klar absetzen
+  (Variante B, 17.09.2026). Bewusst getrennt von `--panel-2`: Wäre die dunkle
+  Farbe dort gesetzt, verschwänden die Eingabefelder im dunklen Fenster.
+- Produktfotos in Kacheln haben einen feinen hellen Ring, sonst gehen Fotos mit
+  dunklen Rändern auf der dunklen Kachel unter. `.product-emoji` hat eine feste
+  Höhe, damit Name und Preis in einer Reihe auf einer Linie stehen, egal ob die
+  Kachel ein Foto oder ein Emoji zeigt.
 - `--linie`, `--trennlinie`, `--flaeche-aktiv` ersetzen die früher an rund 20
   Stellen fest eingetragenen Brauntöne. Neue Rahmen bitte über diese Variablen.
 - `--mustard` ist **Weiß**. Der Name stammt aus der ersten Fassung und ist bewusst

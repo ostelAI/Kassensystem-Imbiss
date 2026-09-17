@@ -25,6 +25,12 @@
     --linie:#94404f;
     --trennlinie:rgba(255,255,255,0.12);
     --flaeche-aktiv:#8f3547;
+    /* Produktkacheln dunkler als der Grund, mit hellem Rand (Variante B vom
+       17.09.2026). Bewusst eigene Variablen: --panel-2 steckt auch in allen
+       Eingabefeldern der Fenster, die wuerden dunkel im dunklen Fenster
+       verschwinden. */
+    --kachel:#45101c;
+    --kachel-rand:rgba(255,255,255,0.22);
     --paper:#f7f1e3;
     --paper-line:#e3d9c2;
     --ink:#2b2420;
@@ -87,9 +93,14 @@
   #grid-wrap::-webkit-scrollbar-track, .modal::-webkit-scrollbar-track{background:transparent;}
   #grid-wrap{flex:1;overflow-y:auto;padding:4px 18px 24px;}
   #grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:12px;}
-  .product-card{background:var(--panel-2);border:1px solid var(--linie);border-radius:14px;padding:14px 10px;display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;transition:transform .08s ease;}
+  .product-card{background:var(--kachel);border:1px solid var(--kachel-rand);border-radius:14px;padding:14px 10px;display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;transition:transform .08s ease;}
   .product-card:active{transform:scale(0.94);background:var(--flaeche-aktiv);}
-  .product-emoji{font-size:30px;line-height:1;}
+  /* Feste Hoehe fuer Emoji und Foto gleichermassen - Fotos (34 px) sind hoeher
+     als Emojis, sonst stehen Name und Preis in einer Reihe nicht auf einer Linie. */
+  .product-emoji{font-size:30px;line-height:1;height:38px;display:flex;align-items:center;justify-content:center;}
+  /* Feiner heller Ring um Produktfotos: Fotos mit dunklen Raendern gehen auf der
+     dunklen Kachel sonst in der Flaeche unter. */
+  .product-emoji img{box-shadow:0 0 0 1px rgba(255,255,255,0.3);}
   .product-name{font-family:var(--schrift-ware);font-size:17px;font-weight:600;line-height:1.1;text-align:center;color:var(--cream-text);}
   .product-price{font-family:var(--schrift-zahl);font-variant-numeric:tabular-nums;font-size:16px;font-weight:700;color:var(--mustard);}
   .empty-msg{color:var(--dim);font-size:14px;padding:30px 0;text-align:center;}
