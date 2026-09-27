@@ -454,6 +454,9 @@ async function init(){
     showToast(geprueft.verworfen + " beschädigte Einträge wurden entfernt");
   }
   await schwellenwerteUmstellen();
+  /* Bewusst ohne await: Die Sicherung laeuft im Hintergrund weiter, die Kasse
+     ist sofort bedienbar. */
+  selbstsicherungPruefen();
   renderGrid();
   renderTabs();
   renderCart();
@@ -1434,9 +1437,8 @@ async function resetDaily(){
   await storageSet("kasse:daily-total", 0);
   await storageSet("kasse:daily-sales", {});
   updateDailyDisplay();
-  /* Zum Tagesabschluss darf sich die Reihenfolge neu einpendeln - da steht
-     niemand am Tresen und wartet. */
   renderGrid();
+  selbstsicherungAblegen("Tagesabschluss");
   closeModal();
 }
 
@@ -1944,6 +1946,9 @@ function renderManageModal(){
           <button class="btn-secondary" onclick="exportData()">⬇ Sichern</button>
           <button class="btn-secondary" onclick="document.getElementById('import-file').click()">⬆ Wiederherstellen</button>
         </div>
+        <div class="modal-actions">
+          <button class="btn-secondary" style="width:100%;" onclick="showSelbstsicherungen()">🛟 Automatische Sicherungen</button>
+        </div>
         ${pinGesetzt() ? `<div class="modal-actions">
           <button class="btn-secondary" style="width:100%;" onclick="pinZuruecksetzenFragen()">🔒 PIN zurücksetzen</button>
         </div>` : ''}
@@ -1952,8 +1957,9 @@ function renderManageModal(){
     </div>
   `;
 }
-function exportData(){
-  const payload = {
+/* Der Inhalt einer Sicherung - von Hand ausgeloest wie auch automatisch. */
+function sicherungsDaten(){
+  return {
     products, categories, supplies, inventory,
     dayHistory, dailyTotal, dailySales, totalSales,
     tabs, activeTabId, lastCompletedOrder,
@@ -1966,16 +1972,197 @@ function exportData(){
     pin: storageGet("kasse:pin", null),
     exportedAt: new Date().toISOString(), version: APP_VERSION
   };
+}
+
+function exportData(){
+  sicherungAlsDatei(sicherungsDaten(), new Date().toISOString().slice(0,10));
+}
+
+function sicherungAlsDatei(payload, datum){
   const blob = new Blob([JSON.stringify(payload, null, 2)], {type:"application/json"});
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "imbiss-kasse-sicherung-" + new Date().toISOString().slice(0,10) + ".json";
+  a.download = "imbiss-kasse-sicherung-" + datum + ".json";
   document.body.appendChild(a);
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
 }
+/* ---------- Selbstsicherung ----------
+   Einmal am Tag legt die Kasse im Hintergrund eine vollstaendige Kopie ab,
+   ohne dass jemand etwas tun oder wegklicken muss.
+
+   Warum IndexedDB und nicht localStorage: Dort liegen bereits die Kassendaten
+   samt Produktfotos. Mehrere Kopien daneben wuerden das Limit von rund 5 MB
+   sprengen - und dann erschiene beim Verkaufen die Meldung "Speichern
+   fehlgeschlagen". Die IndexedDB hat um Groessenordnungen mehr Platz.
+
+   Was das leistet: Schutz vor Fehlgriffen - versehentlich geloeschtes Produkt,
+   misslungener Import, falscher Tagesabschluss. Was es NICHT leistet: Schutz
+   vor Geraeteverlust oder geloeschten Browserdaten, denn die Kopien liegen auf
+   demselben Geraet. Dafuer bleibt "⬇ Sichern" als Datei noetig. */
+const SICHERUNG_DB = "kasse-sicherungen";
+const SICHERUNG_SPEICHER = "taeglich";
+const SICHERUNG_TAGE = 14;
+
+function sicherungDbOeffnen(){
+  return new Promise((fertig, fehler)=>{
+    const anfrage = indexedDB.open(SICHERUNG_DB, 1);
+    anfrage.onupgradeneeded = ()=>{
+      const db = anfrage.result;
+      if(!db.objectStoreNames.contains(SICHERUNG_SPEICHER)) db.createObjectStore(SICHERUNG_SPEICHER);
+    };
+    anfrage.onsuccess = ()=> fertig(anfrage.result);
+    anfrage.onerror = ()=> fehler(anfrage.error);
+  });
+}
+function sicherungVorgang(modus, arbeit){
+  return sicherungDbOeffnen().then(db => new Promise((fertig, fehler)=>{
+    const vorgang = db.transaction(SICHERUNG_SPEICHER, modus);
+    const anfrage = arbeit(vorgang.objectStore(SICHERUNG_SPEICHER));
+    vorgang.oncomplete = ()=>{ db.close(); fertig(anfrage ? anfrage.result : undefined); };
+    vorgang.onerror = ()=>{ db.close(); fehler(vorgang.error); };
+  }));
+}
+
+/* Legt eine Kopie ab. Schlaegt das fehl, faellt es nicht weiter auf - eine
+   misslungene Sicherung darf den Verkauf nicht stoeren. */
+async function selbstsicherungAblegen(grund, eigenerSchluessel){
+  try{
+    /* Ohne eigenen Schluessel landet die Kopie unter dem heutigen Datum. Die
+       Sicherung vor einem Import braucht einen eigenen, sonst ueberschreibt sie
+       die Tageskopie und der Stand von heute frueh waere weg. */
+    const schluessel = eigenerSchluessel || new Date().toISOString().slice(0,10);
+    await sicherungVorgang("readwrite", laden =>
+      laden.put({daten: sicherungsDaten(), grund, zeit: new Date().toISOString()}, schluessel));
+    await alteSicherungenLoeschen();
+    return true;
+  }catch(e){
+    console.warn("Selbstsicherung nicht moeglich", e);
+    return false;
+  }
+}
+
+/* Raeumt nach echtem Alter auf, nicht nach Anzahl: Wird die Kasse eine Weile
+   nicht geoeffnet, lagen sonst Kopien von vor Monaten herum. */
+async function alteSicherungenLoeschen(){
+  const grenze = Date.now() - SICHERUNG_TAGE * 24 * 60 * 60 * 1000;
+  const schluessel = await sicherungVorgang("readonly", laden => laden.getAllKeys());
+  const werte = await sicherungVorgang("readonly", laden => laden.getAll());
+  for(let i = 0; i < schluessel.length; i++){
+    const k = schluessel[i];
+    /* Datum aus dem Schluessel, sonst aus dem Zeitstempel (z. B. "vor-import"). */
+    const zeitpunkt = /^\d{4}-\d{2}-\d{2}$/.test(k)
+      ? Date.parse(k + "T23:59:59")
+      : Date.parse((werte[i] && werte[i].zeit) || "");
+    if(Number.isFinite(zeitpunkt) && zeitpunkt < grenze){
+      await sicherungVorgang("readwrite", laden => laden.delete(k));
+    }
+  }
+}
+
+/* Beim Start: Gibt es fuer heute noch keine Kopie, wird eine angelegt. */
+async function selbstsicherungPruefen(){
+  try{
+    const heute = new Date().toISOString().slice(0,10);
+    const vorhanden = await sicherungVorgang("readonly", laden => laden.get(heute));
+    if(!vorhanden) await selbstsicherungAblegen("Tagesbeginn");
+    else await alteSicherungenLoeschen();   // auch ohne neue Kopie aufraeumen
+  }catch(e){
+    console.warn("Selbstsicherung nicht moeglich", e);
+  }
+}
+
+/* Lesbarer Name fuer einen Sicherungsschluessel. */
+function sicherungName(schluessel){
+  if(schluessel === "vor-import") return "vor dem letzten Wiederherstellen";
+  const t = String(schluessel);
+  return /^\d{4}-\d{2}-\d{2}$/.test(t)
+    ? new Date(t + "T12:00:00").toLocaleDateString("de-DE", {weekday:'short', day:'2-digit', month:'2-digit', year:'numeric'})
+    : t;
+}
+
+async function selbstsicherungenAuflisten(){
+  try{
+    const schluessel = await sicherungVorgang("readonly", laden => laden.getAllKeys());
+    const werte = await sicherungVorgang("readonly", laden => laden.getAll());
+    return schluessel.map((k,i)=>({schluessel:k, ...werte[i],
+        groesse: JSON.stringify(werte[i]).length}))
+      .sort((a,b)=> String(b.schluessel).localeCompare(String(a.schluessel)));
+  }catch(e){
+    console.warn("Sicherungen nicht lesbar", e);
+    return [];
+  }
+}
+
+async function showSelbstsicherungen(){
+  const liste = await selbstsicherungenAuflisten();
+  const zeilen = liste.map(e=>{
+    const zeit = e.zeit ? new Date(e.zeit).toLocaleString("de-DE", {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : "";
+    return `
+      <div class="product-manage-row">
+        <div class="pmr-info">
+          <div class="pmr-name">${escapeHtml(sicherungName(e.schluessel))}</div>
+          <div class="pmr-sub">${escapeHtml(zeit)} · ${escapeHtml(e.grund || "")} · ${Math.round(e.groesse/1024)} KB</div>
+        </div>
+        <div class="pmr-actions">
+          <button class="icon-btn" title="Als Datei speichern" onclick="selbstsicherungDatei('${escapeHtml(e.schluessel)}')">⬇</button>
+          <button class="icon-btn" title="Diesen Stand wiederherstellen" onclick="selbstsicherungZurueck('${escapeHtml(e.schluessel)}')">↩</button>
+        </div>
+      </div>`;
+  }).join("");
+  document.getElementById("modal-root").innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this) closeModal()">
+      <div class="modal">
+        <button class="close-x" onclick="closeModal()">✕</button>
+        <h2>🛟 Automatische Sicherungen</h2>
+        <p style="color:var(--dim);font-size:13px;margin:-8px 0 12px;">Die Kasse legt beim ersten Öffnen am Tag und bei jedem Tagesabschluss selbst eine Kopie an. Die letzten ${SICHERUNG_TAGE} Tage werden aufgehoben. <strong>Achtung:</strong> Die Kopien liegen auf diesem Gerät. Gegen ein verlorenes oder zurückgesetztes Tablet hilft nur „⬇ Sichern" als Datei.</p>
+        ${zeilen || '<div class="empty-msg">Noch keine automatische Sicherung vorhanden.</div>'}
+        <div class="modal-actions">
+          <button class="btn-secondary" onclick="openManage()">Zurück</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function selbstsicherungDatei(schluessel){
+  const eintrag = await sicherungVorgang("readonly", laden => laden.get(schluessel));
+  if(eintrag && eintrag.daten) sicherungAlsDatei(eintrag.daten, String(schluessel));
+}
+
+function selbstsicherungZurueck(schluessel){
+  showConfirm(
+    "Stand wiederherstellen?",
+    `Die Kasse wird auf den Stand <span class="confirm-name">${escapeHtml(sicherungName(schluessel))}</span> zurückgesetzt. Alles, was seitdem verkauft oder geändert wurde, geht verloren.`,
+    "Wiederherstellen",
+    async ()=>{
+      const eintrag = await sicherungVorgang("readonly", laden => laden.get(schluessel));
+      if(!eintrag || !eintrag.daten){ alert("Diese Sicherung ist nicht lesbar."); return; }
+      await selbstsicherungAblegen("vor dem Zurücksetzen", "vor-import");
+      datenUebernehmenUndZeichnen(eintrag.daten);
+      closeModal();
+      showToast("Stand " + sicherungName(schluessel) + " wiederhergestellt");
+    }
+  );
+}
+
+/* Gemeinsamer Weg fuer Datei-Import und Wiederherstellung aus der Selbstsicherung. */
+async function datenUebernehmenUndZeichnen(roh){
+  const geprueft = datensatzPruefen(roh);
+  datensatzUebernehmen(geprueft.daten);
+  if(roh.schwelleMigriert !== true) altnullenAufNichtGesetzt(inventory);
+  await datensatzSichern();
+  await storageSet("kasse:schwelle-migriert-v1", true);
+  if(typeof roh.pin === "string") await storageSet("kasse:pin", roh.pin);
+  renderGrid();
+  renderTabs();
+  renderCart();
+  updateDailyDisplay();
+  updateInventoryBadge();
+}
+
 function importData(event){
   const file = event.target.files[0];
   if(!file) return;
@@ -2006,24 +2193,11 @@ function importData(event){
       `Es werden ${geprueft.daten.products.length} Produkte und ${geprueft.daten.categories.length} Kategorien geladen, dazu Verbrauchsmaterial, Lagerbestand, Wochenverlauf und offene Bons. Die aktuellen Daten auf diesem Gerät werden dabei überschrieben.${hinweis}`,
       "Überschreiben",
       async ()=>{
-        datensatzUebernehmen(geprueft.daten);
-        /* Sicherung aus einer Fassung vor der Schwellwert-Umstellung: Dort ist
-           jedes "threshold: 0" ein automatischer Startwert, kein bewusst
-           gesetzter Schwellwert. Wuerde man das uebernehmen, erschiene sofort
-           fuer fast jedes Produkt eine Nachbestell-Warnung. */
-        if(data.schwelleMigriert !== true) altnullenAufNichtGesetzt(inventory);
-        if(typeof data.pin === "string") await storageSet("kasse:pin", data.pin);
-        await datensatzSichern();
-        /* Nach dem Einlesen gilt die Umstellung als erledigt - egal aus welcher
-           Fassung die Datei kam. Sonst liefe sie beim naechsten Start erneut und
-           wuerde bewusst gesetzte Nullen wieder abschalten. */
-        await storageSet("kasse:schwelle-migriert-v1", true);
-        renderGrid();
+        /* Erst den bisherigen Stand wegsichern - ein misslungener Import ist
+           sonst nicht mehr rueckgaengig zu machen. */
+        await selbstsicherungAblegen("vor dem Wiederherstellen", "vor-import");
+        await datenUebernehmenUndZeichnen(data);
         renderManageModal();
-        renderTabs();
-        renderCart();
-        updateDailyDisplay();
-        updateInventoryBadge();
       }
     );
   };

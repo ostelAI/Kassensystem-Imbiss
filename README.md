@@ -31,6 +31,7 @@ was nachbestellt werden muss.
 | **Auswertung** | Tagesumsatz, Tagesranking, Wochenverlauf mit rund einem Jahr Historie. |
 | **PIN** | Alle Ansichten mit Umsatzbezug sind hinter einer PIN. |
 | **Sichern** | Vollständiger Export und Import als JSON-Datei. |
+| **Selbstsicherung** | Die Kasse legt täglich im Hintergrund selbst eine Kopie an und hebt 14 Tage auf – ohne Zutun der Bedienung. |
 
 ## Dateien
 
@@ -94,7 +95,23 @@ In der App: **Produkte verwalten → ⬇ Sichern**. Das schreibt eine JSON-Datei
 allem: Produkte, Kategorien, Verbrauchsmaterial, Lagerbestand, Tagesumsatz,
 Verkaufszähler, Wochenverlauf, offene Bons und die PIN-Prüfsumme.
 
-Regelmäßig machen. Es ist die einzige Kopie außerhalb des Geräts.
+Regelmäßig machen. Es ist die einzige Kopie **außerhalb** des Geräts.
+
+### Selbstsicherung
+
+Zusätzlich sichert die Kasse sich selbst: beim ersten Öffnen am Tag und bei
+jedem Tagesabschluss, lautlos im Hintergrund. Die Kopien liegen in der IndexedDB
+des Browsers (nicht im `localStorage`, der ist mit den Produktfotos schon gut
+gefüllt) und werden nach **14 Tagen** automatisch gelöscht. Vor jedem
+Wiederherstellen wird der bisherige Stand zusätzlich weggesichert.
+
+Einsehbar unter **Produkte verwalten → 🛟 Automatische Sicherungen**; dort lässt
+sich jeder Stand zurückholen oder als Datei speichern.
+
+**Das ersetzt das Sichern als Datei nicht.** Die Kopien liegen auf demselben
+Gerät. Sie helfen gegen Fehlgriffe – versehentlich gelöschtes Produkt,
+misslungenes Wiederherstellen – aber nicht gegen ein verlorenes, kaputtes oder
+zurückgesetztes Tablet.
 
 ### Umziehen auf eine neue Adresse
 

@@ -199,6 +199,36 @@ wiederverwendet sein.
 das stünde die App auf einer neuen Adresse ohne PIN da – die Umsatzansichten
 wären dort offen.
 
+## Selbstsicherung (IndexedDB)
+Die Kasse legt ohne Zutun der Bedienung Kopien an: beim ersten Öffnen am Tag
+(`selbstsicherungPruefen()` in `init()`, bewusst **ohne** `await`, damit der
+Start nicht wartet) und bei jedem Tagesabschluss. Zusätzlich vor jedem
+Überschreiben durch Import oder Wiederherstellung, unter dem eigenen Schlüssel
+`vor-import`.
+
+**Warum IndexedDB und nicht `localStorage`:** Dort liegen bereits die Kassendaten
+samt Produktfotos. Mehrere Vollkopien daneben sprengen das Limit von rund 5 MB –
+und dann erscheint beim Verkaufen "Speichern fehlgeschlagen". Die IndexedDB hat
+um Größenordnungen mehr Platz.
+
+**Aufräumen nach Alter, nicht nach Anzahl** (`alteSicherungenLoeschen()`): Es
+werden Einträge gelöscht, die älter als `SICHERUNG_TAGE` (14) sind. Ein Limit auf
+die letzten 14 *Einträge* hätte bei längerer Pause Kopien von vor Monaten
+liegen lassen.
+
+**Fallstrick, der beim Testen auffiel:** `selbstsicherungAblegen()` schrieb immer
+unter dem heutigen Datum. Die Sicherung vor einem Import überschrieb damit die
+Tageskopie, statt einen eigenen Eintrag anzulegen. Deshalb der optionale zweite
+Parameter `eigenerSchluessel`.
+
+Fehler beim Sichern werden nur auf der Konsole vermerkt – eine misslungene
+Sicherung darf den Verkauf nicht stören. Erfolg wird **nicht** gemeldet; das
+Ganze soll unbemerkt laufen.
+
+**Grenze:** Die Kopien liegen auf demselben Gerät und schützen nur gegen
+Fehlgriffe, nicht gegen Geräteverlust. Dafür bleibt der Export als Datei nötig –
+siehe [Daten hängen an der Adresse].
+
 ## Datenprüfung (`datensatzPruefen`)
 Alles, was aus dem `localStorage` oder aus einer Sicherungsdatei kommt, gilt als
 unbekannt und wird durch `datensatzPruefen()` normalisiert, bevor die App damit
