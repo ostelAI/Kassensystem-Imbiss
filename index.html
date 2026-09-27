@@ -65,6 +65,9 @@
   #brand{display:flex;flex-direction:column;min-width:0;}
   #powered{display:flex;align-items:center;gap:6px;margin-top:6px;font-size:11px;color:var(--dim);letter-spacing:0.5px;white-space:nowrap;}
   #powered img{width:18px;height:18px;border-radius:4px;display:block;flex-shrink:0;}
+  #uhr{display:flex;flex-direction:column;align-items:flex-start;line-height:1;padding-left:14px;border-left:1px solid var(--linie);}
+  #uhr-zeit{font-family:var(--schrift-zahl);font-variant-numeric:tabular-nums;font-size:32px;font-weight:700;color:var(--cream-text);}
+  #uhr-datum{font-size:12px;color:var(--dim);letter-spacing:1px;margin-top:4px;text-transform:uppercase;}
   #shop-title{font-family:var(--schrift-titel);font-size:20px;letter-spacing:0.5px;color:var(--mustard);text-transform:uppercase;}
   #daily{display:flex;align-items:center;gap:10px;background:var(--panel-2);border:1px solid var(--linie);border-radius:10px;padding:8px 12px;cursor:pointer;user-select:none;}
   #daily:active{transform:scale(0.98);}
@@ -80,10 +83,16 @@
     50%{box-shadow:0 0 0 12px rgba(255,255,255,0); transform:scale(1.12);}
   }
 
-  #cats{display:flex;gap:8px;padding:6px 18px 12px;overflow-x:auto;flex-shrink:0;}
-  #cats::-webkit-scrollbar{display:none;}
-  .cat-pill{flex-shrink:0;padding:9px 16px;border-radius:999px;background:var(--panel-2);border:1px solid var(--linie);color:var(--dim);font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap;}
-  .cat-pill.active{background:var(--mustard);color:var(--bg);border-color:var(--mustard);}
+  /* Hauptansicht: grosse, farbige Kategorie-Kacheln. Die fruehere Wischleiste
+     oben ist entfallen - man musste sie seitlich schieben, um an Kategorien zu
+     kommen, und das sah man ihr nicht an. */
+  /* Groesse kommt aus kachelnEinpassen(); die Schrift waechst und schrumpft mit
+     der Kachelbreite, damit bei vielen Kategorien alles lesbar bleibt. */
+  .kat-kachel{border-radius:18px;padding:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;cursor:pointer;color:#fff;border:1px solid rgba(255,255,255,0.28);transition:transform .08s ease;overflow:hidden;width:100%;max-width:460px;justify-self:center;}
+  .kat-kachel:active{transform:scale(0.96);filter:brightness(1.12);}
+  .kat-name{font-family:var(--schrift-ware);font-size:clamp(14px, min(calc(var(--kachel-breite,190px) * 0.155), calc(var(--kachel-hoehe,160px) * 0.30)), 34px);font-weight:600;text-align:center;line-height:1.05;}
+  .kat-anzahl-artikel{font-size:clamp(10px, min(calc(var(--kachel-breite,190px) * 0.07), calc(var(--kachel-hoehe,160px) * 0.13)), 15px);opacity:0.85;}
+  .kat-emojis{font-size:clamp(12px, min(calc(var(--kachel-breite,190px) * 0.12), calc(var(--kachel-hoehe,160px) * 0.22)), 26px);line-height:1;}
 
   /* Schmale, halbtransparente Scrollbalken - der graue Windows-Balken wirkte
      auf dem Bordeaux wie ein Fremdkoerper. */
@@ -92,7 +101,7 @@
   #grid-wrap::-webkit-scrollbar-thumb, .modal::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.3);border-radius:8px;}
   #grid-wrap::-webkit-scrollbar-track, .modal::-webkit-scrollbar-track{background:transparent;}
   #grid-wrap{flex:1;overflow-y:auto;padding:4px 18px 24px;}
-  #grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:12px;}
+  #grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px;align-content:start;}
   .product-card{background:var(--kachel);border:1px solid var(--kachel-rand);border-radius:14px;padding:14px 10px;display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;transition:transform .08s ease;}
   .product-card:active{transform:scale(0.94);background:var(--flaeche-aktiv);}
   /* Feste Hoehe fuer Emoji und Foto gleichermassen - Fotos (34 px) sind hoeher
@@ -119,9 +128,18 @@
      dort wischen kann, sieht man ihr nicht an, die Gast-Bons waren praktisch
      unauffindbar. Die Bons selbst brechen um und scrollen bei Bedarf senkrecht. */
   #tab-area{display:flex;flex-direction:column;gap:6px;padding:6px 10px;flex-shrink:0;border-bottom:1px dashed var(--paper-line);}
-  #tab-row{display:flex;flex-wrap:wrap;gap:5px;max-height:104px;overflow-y:auto;}
+  #tab-row{display:flex;flex-wrap:wrap;gap:5px;max-height:104px;overflow:hidden;}
+  #tab-row.ausgeklappt{max-height:300px;overflow-y:auto;}
+  /* Weicher Auslauf am unteren Rand, solange etwas abgeschnitten ist - damit man
+     sieht, dass da noch mehr kommt. Der eigentliche Hinweis ist aber der Knopf
+     "weitere": eine reine Wisch-Geste findet am Stand niemand. */
+  #tab-row.abgeschnitten{-webkit-mask-image:linear-gradient(to bottom, #000 calc(100% - 20px), transparent);mask-image:linear-gradient(to bottom, #000 calc(100% - 20px), transparent);}
   #tab-row::-webkit-scrollbar{display:none;}
-  #tab-add{align-self:flex-start;}
+  #tab-leiste{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .tab-chip-mehr{flex-shrink:0;background:#efe6d2;border:1px solid #d9cba9;border-radius:999px;padding:8px 12px;font-size:13px;font-weight:700;color:#5c4f3d;cursor:pointer;}
+  /* Verborgene Bons mit unbezahlten Artikeln sind der teure Fall - dann faellt
+     der Knopf genauso auf wie ein offener Gast-Bon. */
+  .tab-chip-mehr.offen{background:#e91e8c;border-color:#c2157a;color:#fff;animation:pulse-guest 1.3s ease-in-out infinite;}
   .tab-chip{flex-shrink:0;display:flex;align-items:center;gap:4px;background:#efe6d2;border:1px solid #d9cba9;border-radius:999px;padding:8px 12px;font-size:13px;font-weight:700;color:#5c4f3d;cursor:pointer;white-space:nowrap;}
   .tab-chip.active{background:var(--paprika);border-color:var(--paprika);color:#fff;}
   .tab-chip.schnellverkauf{background:#f7dbd5;border-color:#e2ab9d;color:#8a2f1f;}
@@ -149,9 +167,11 @@
   #receipt-totals{padding:8px 14px 4px;border-top:1px dashed var(--paper-line);font-family:var(--schrift-zahl);font-variant-numeric:tabular-nums;flex-shrink:0;}
   .trow{display:flex;justify-content:space-between;font-size:12px;padding:2px 0;color:#5c4f3d;}
   .trow.gesamt{font-size:22px;font-weight:800;color:var(--ink);padding-top:4px;}
-  #receipt-actions{padding:8px 14px 10px;display:flex;flex-direction:column;gap:6px;flex-shrink:0;}
-  #clear-btn{background:none;border:1px solid #c9bc9e;color:#7a6c54;border-radius:9px;padding:9px 10px;font-size:12px;cursor:pointer;font-family:var(--schrift-ui);}
-  #pay-btn{background:var(--basil);color:#fff;border:none;border-radius:9px;padding:11px 10px;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--schrift-ui);}
+  /* Deutlicher Abstand zwischen "Leeren" und "Kasse": Der Griff daneben hat im
+     Betrieb schon Bons geleert. */
+  #receipt-actions{padding:8px 14px 12px;display:flex;flex-direction:column;gap:20px;flex-shrink:0;}
+  #clear-btn{background:none;border:1px solid #c9bc9e;color:#7a6c54;border-radius:10px;padding:14px 10px;font-size:15px;cursor:pointer;font-family:var(--schrift-ui);}
+  #pay-btn{background:var(--basil);color:#fff;border:none;border-radius:12px;padding:22px 10px;font-size:22px;font-weight:800;cursor:pointer;font-family:var(--schrift-ui);}
   #pay-btn:disabled{background:#a8b39d;cursor:not-allowed;}
   #pay-btn:active:not(:disabled){filter:brightness(0.92);}
   #version-tag{font-family:var(--schrift-zahl);font-variant-numeric:tabular-nums;font-size:10px;font-weight:400;color:var(--dim);letter-spacing:0;text-transform:none;vertical-align:middle;margin-left:2px;}
@@ -159,6 +179,29 @@
   /* ---------- modals ---------- */
   .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:flex-end;justify-content:center;z-index:100;}
   @media(min-width:640px){.modal-overlay{align-items:center;}}
+  /* Das Kategorie-Fenster braucht Platz fuer ein Produktraster. */
+  .modal.kat-fenster{max-width:900px;}
+  /* Kopfzeile und "Fertig" bleiben beim Scrollen stehen. Bei einer Kategorie
+     mit vielen Sorten rutschte der Knopf sonst aus dem Bild und man musste erst
+     nach unten wischen, um das Fenster zu schliessen. */
+  .kat-kopf{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:0 0 14px;position:sticky;top:0;z-index:2;background:var(--panel);padding:2px 0 10px;}
+  .kat-bon{font-family:var(--schrift-zahl);font-variant-numeric:tabular-nums;font-size:20px;font-weight:700;color:var(--cream-text);white-space:nowrap;}
+  .kat-raster{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;align-content:start;}
+  .kat-produkt{background:var(--kachel);border:1px solid var(--kachel-rand);border-radius:14px;padding:10px 8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;transition:transform .08s ease;overflow:hidden;width:100%;max-width:340px;justify-self:center;}
+  /* Bild- und Schriftgroessen im Kategorie-Fenster haengen an der Kachelbreite.
+     Das !important ist noetig, weil productIconHtml die Masse inline setzt. */
+  .kat-produkt .product-emoji{height:var(--bildgroesse,40px);font-size:var(--bildgroesse,40px);}
+  .kat-produkt .product-emoji img{width:var(--bildgroesse,40px)!important;height:var(--bildgroesse,40px)!important;}
+  .kat-produkt .product-name{font-size:clamp(12px, min(calc(var(--kachel-breite,150px) * 0.115), calc(var(--kachel-hoehe,150px) * 0.13)), 20px);}
+  .kat-produkt .product-price{font-size:clamp(11px, min(calc(var(--kachel-breite,150px) * 0.105), calc(var(--kachel-hoehe,150px) * 0.12)), 18px);}
+  .kat-produkt:active{transform:scale(0.94);background:var(--flaeche-aktiv);}
+  /* Die Zeile ist immer da, nur unsichtbar wenn nichts im Bon liegt - sonst
+     wuerden die Kacheln beim ersten Antippen in der Hoehe springen. */
+  .kat-menge{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:2px;}
+  .kat-menge.leer{visibility:hidden;}
+  .kat-minus{width:clamp(30px, calc(var(--kachel-hoehe,170px) * 0.26), 38px);height:clamp(30px, calc(var(--kachel-hoehe,170px) * 0.26), 38px);border-radius:10px;border:1px solid var(--kachel-rand);background:var(--flaeche-aktiv);color:#fff;font-size:22px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;}
+  .kat-zahl{font-family:var(--schrift-zahl);font-variant-numeric:tabular-nums;font-size:clamp(17px, calc(var(--kachel-hoehe,170px) * 0.16), 24px);font-weight:800;color:var(--cream-text);min-width:28px;text-align:center;}
+  .kat-fertig{position:sticky;bottom:0;z-index:2;width:100%;margin-top:18px;box-shadow:0 -10px 14px var(--panel);background:var(--mustard);color:var(--bg);border:none;border-radius:12px;padding:18px;font-size:20px;font-weight:800;cursor:pointer;}
   .modal{background:var(--panel);width:100%;max-width:420px;max-height:88vh;overflow-y:auto;border-radius:18px 18px 0 0;padding:20px;}
   @media(min-width:640px){.modal{border-radius:18px;}}
   .modal h2{font-family:var(--schrift-titel);font-size:17px;margin:0 0 14px;color:var(--mustard);text-transform:uppercase;letter-spacing:0.5px;}
@@ -226,8 +269,7 @@
     .topbar-btn{padding:8px 10px;font-size:11px;}
     .product-card{padding:10px 6px;}
     .product-emoji{font-size:24px;}
-    #grid{grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;}
-    #cats{padding:6px 10px 10px;}
+    #grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;}
     #topbar{padding:10px 10px 6px;}
     #grid-wrap{padding:4px 10px 20px;}
   }
@@ -243,9 +285,12 @@
 
   <div id="board">
     <div id="topbar">
-      <div id="brand">
-        <div id="shop-title">🌭 Imbiss Kasse <span id="version-tag"></span></div>
-        <div id="powered"><img src="coc-logo.png" alt="COC" width="18" height="18">powered by COC</div>
+      <div style="display:flex;align-items:center;gap:14px;min-width:0;">
+        <div id="brand">
+          <div id="shop-title">🌭 Imbiss Kasse <span id="version-tag"></span></div>
+          <div id="powered"><img src="coc-logo.png" alt="COC" width="18" height="18">powered by COC</div>
+        </div>
+        <div id="uhr"><div id="uhr-zeit"></div><div id="uhr-datum"></div></div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;">
         <div id="daily" onclick="mitPin(showDailyModal)">
@@ -262,7 +307,6 @@
         <button class="topbar-btn" onclick="openManage()">Produkte verwalten</button>
       </div>
     </div>
-    <div id="cats"></div>
     <div id="grid-wrap"><div id="grid"></div></div>
   </div>
 
@@ -273,7 +317,10 @@
     </div>
     <div id="tab-area">
       <div id="tab-row"></div>
-      <button class="tab-chip-add" id="tab-add" onclick="promptNewTab()">+ Gast</button>
+      <div id="tab-leiste">
+        <button class="tab-chip-add" id="tab-add" onclick="promptNewTab()">+ Gast</button>
+        <button class="tab-chip-mehr" id="bon-mehr" onclick="bonsUmschalten()" hidden></button>
+      </div>
     </div>
     <div id="cart-lines"></div>
     <div id="receipt-totals">
@@ -313,7 +360,6 @@ let categories = [];
 let tabs = [{id:"default", name:"Schnellverkauf", items:{}}]; // mehrere gleichzeitig offene Bons
 let activeTabId = "default";
 let lastCompletedOrder = null; // {items, total, tabName, completedAt} - wird bei jedem Kassenabschluss überschrieben
-let activeCategory = "Alle";
 let dailyTotal = 0;
 let dailySales = {}; // productId -> verkaufte Menge heute
 let totalSales = {}; // productId -> verkaufte Menge insgesamt (bleibt für Ranking dauerhaft erhalten)
@@ -408,8 +454,6 @@ async function init(){
     showToast(geprueft.verworfen + " beschädigte Einträge wurden entfernt");
   }
   await schwellenwerteUmstellen();
-  rangfolgeNeuBestimmen();
-  renderCategories();
   renderGrid();
   renderTabs();
   renderCart();
@@ -419,7 +463,7 @@ async function init(){
      von Hand gepflegt werden muss und auseinanderlaufen kann. */
   document.getElementById("version-tag").textContent = "v" + APP_VERSION;
   updateClock();
-  setInterval(updateClock, 30000);
+  setInterval(updateClock, 15000);
 }
 
 function updateClock(){
@@ -427,7 +471,11 @@ function updateClock(){
      Betrag von selbst wieder, auch wenn niemand etwas antippt. */
   updateDailyDisplay();
   const now = new Date();
-  document.getElementById("rtime").textContent = now.toLocaleDateString("de-DE") + "  " + now.toLocaleTimeString("de-DE",{hour:'2-digit',minute:'2-digit'});
+  const zeit = now.toLocaleTimeString("de-DE", {hour:'2-digit', minute:'2-digit'});
+  document.getElementById("rtime").textContent = now.toLocaleDateString("de-DE") + "  " + zeit;
+  document.getElementById("uhr-zeit").textContent = zeit;
+  document.getElementById("uhr-datum").textContent =
+    now.toLocaleDateString("de-DE", {weekday:'short', day:'2-digit', month:'2-digit'});
 }
 
 /* ---------- PIN fuer die Umsatzansichten ----------
@@ -595,60 +643,165 @@ function updateDailyDisplay(){
 }
 
 /* ---------- rendering ---------- */
-function renderCategories(){
-  const wrap = document.getElementById("cats");
-  wrap.innerHTML = "";
-  const all = ["Alle", ...categories];
-  all.forEach(cat=>{
-    const pill = document.createElement("div");
-    pill.className = "cat-pill" + (cat===activeCategory ? " active":"");
-    pill.textContent = cat;
-    pill.onclick = ()=>{ activeCategory = cat; renderCategories(); renderGrid(); };
-    wrap.appendChild(pill);
-  });
+/* Feste Farbreihe fuer die Kategorie-Kacheln. Alle dunkel genug, dass weisse
+   Schrift darauf gut lesbar bleibt. Die Farbe haengt an der Position der
+   Kategorie, bleibt also gleich, solange die Reihenfolge gleich bleibt. */
+const KAT_FARBEN = ["#a8402f","#2e6b45","#2a5b80","#8a5a17","#6a3c85",
+                    "#17706b","#9c3358","#4d5a22","#7a4a2a","#3a4a7a",
+                    "#c0562c","#1f5e33","#345f9c","#7d4f8c","#0f6b5c",
+                    "#8e2f3f"];
+function katFarbe(index){ return KAT_FARBEN[index % KAT_FARBEN.length]; }
+
+function produkteDerKategorie(cat){
+  return products.filter(p => p.category === cat)
+                 .sort((a,b) => a.name.localeCompare(b.name, "de"));
 }
 
-/* Reihenfolge der Kacheln in der "Alle"-Ansicht.
-   Sortiert wird weiterhin nach Gesamtverkaeufen, aber die Reihenfolge wird
-   bewusst nur zu festen Zeitpunkten neu bestimmt: beim Start, beim
-   Tagesabschluss und wenn sich der Produktbestand aendert. Frueher wurde nach
-   jedem abgeschlossenen Verkauf neu sortiert - dadurch verschoben sich die
-   Kacheln mitten im Betrieb unter dem Finger. */
-let rangfolge = {};   // productId -> Platz
-function rangfolgeNeuBestimmen(){
-  rangfolge = {};
-  products.slice()
-    .sort((a,b)=>(totalSales[b.id]||0) - (totalSales[a.id]||0))
-    .forEach((p,i)=>{ rangfolge[p.id] = i; });
-}
-
+/* Hauptansicht: nur die Kategorien, dafuer gross. Die Produkte liegen im
+   Kategorie-Fenster - so muss am Stand niemand durch eine lange Liste scrollen. */
 function renderGrid(){
   const grid = document.getElementById("grid");
   grid.innerHTML = "";
-  let list = products.filter(p => activeCategory==="Alle" || p.category===activeCategory);
-  if(activeCategory==="Alle"){
-    list = list.slice().sort((a,b) => {
-      const ra = rangfolge[a.id], rb = rangfolge[b.id];
-      /* Produkte, die es beim letzten Festlegen noch nicht gab, kommen ans
-         Ende - bis die Rangfolge das naechste Mal neu bestimmt wird. */
-      if(ra === undefined && rb === undefined) return a.name.localeCompare(b.name, "de");
-      if(ra === undefined) return 1;
-      if(rb === undefined) return -1;
-      return ra - rb;
-    });
-  } else {
-    list = list.slice().sort((a,b) => a.name.localeCompare(b.name, "de"));
-  }
-  if(list.length===0){
-    grid.innerHTML = '<div class="empty-msg">Keine Produkte in dieser Kategorie.<br>Tippe oben auf "Produkte verwalten".</div>';
+  if(categories.length === 0){
+    grid.innerHTML = '<div class="empty-msg">Noch keine Kategorien angelegt.<br>Tippe oben auf "Produkte verwalten".</div>';
     return;
   }
-  list.forEach(p=>{
-    const card = document.createElement("div");
-    card.className = "product-card";
-    card.innerHTML = `<div class="product-emoji">${productIconHtml(p,34)}</div><div class="product-name">${escapeHtml(p.name)}</div><div class="product-price">${fmt(p.price)}</div>`;
-    card.onclick = ()=> addToCart(p.id);
-    grid.appendChild(card);
+  categories.forEach((cat, i)=>{
+    const artikel = produkteDerKategorie(cat);
+    const kachel = document.createElement("div");
+    kachel.className = "kat-kachel";
+    kachel.style.background = katFarbe(i);
+    const symbole = artikel.slice(0,3).map(p => p.image ? "\u{1F4F7}" : sicheresIcon(p.emoji, "")).join(" ");
+    kachel.innerHTML = `<div class="kat-emojis">${escapeHtml(symbole)}</div>
+      <div class="kat-name">${escapeHtml(cat)}</div>
+      <div class="kat-anzahl-artikel">${artikel.length} ${artikel.length === 1 ? "Artikel" : "Artikel"}</div>`;
+    kachel.onclick = ()=> showKatFenster(i);
+    grid.appendChild(kachel);
+  });
+  kategorienEinpassen();
+}
+
+/* Ein Fenster je Kategorie. Es bleibt nach dem Antippen offen, damit eine Runde
+   Bier nicht dreimal denselben Weg braucht; die Menge steht gross an der Kachel
+   und laesst sich dort auch wieder herunterzaehlen. */
+function showKatFenster(index){
+  const cat = categories[index];
+  if(cat === undefined) return;
+  const artikel = produkteDerKategorie(cat);
+  const karten = artikel.map(p=>`
+      <div class="kat-produkt" onclick="katPlus('${p.id}')">
+        <div class="product-emoji">${productIconHtml(p,40)}</div>
+        <div class="product-name">${escapeHtml(p.name)}</div>
+        <div class="product-price">${fmt(p.price)}</div>
+        <div class="kat-menge leer" id="katmenge-${p.id}">
+          <button class="kat-minus" onclick="event.stopPropagation(); katMinus('${p.id}')">−</button>
+          <span class="kat-zahl" id="katzahl-${p.id}">0</span>
+        </div>
+      </div>`).join("");
+  document.getElementById("modal-root").innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this) closeModal()">
+      <div class="modal kat-fenster" style="border-top:6px solid ${katFarbe(index)};">
+        <button class="close-x" onclick="closeModal()">✕</button>
+        <div class="kat-kopf">
+          <h2 style="margin:0;">${escapeHtml(cat)}</h2>
+          <span class="kat-bon" id="kat-bon"></span>
+        </div>
+        ${karten || '<div class="empty-msg">In dieser Kategorie ist noch kein Artikel.</div>'}
+        <button class="kat-fertig" onclick="closeModal()">Fertig</button>
+      </div>
+    </div>
+  `;
+  const raster = document.createElement("div");
+  raster.className = "kat-raster";
+  const fenster = document.querySelector(".kat-fenster");
+  const knopf = fenster.querySelector(".kat-fertig");
+  [...fenster.querySelectorAll(".kat-produkt")].forEach(k => raster.appendChild(k));
+  if(raster.children.length) fenster.insertBefore(raster, knopf);
+  katFensterEinpassen();
+  aktualisiereKatFenster();
+}
+
+/* Sucht die Aufteilung, bei der alle Kacheln in die vorhandene Flaeche passen und
+   dabei so gross wie moeglich werden. Erst wenn selbst die kleinste erlaubte
+   Groesse nicht mehr hineinpasst, wird wieder gescrollt - dann aber mit den
+   kleinsten Kacheln, sodass so viel wie moeglich auf einen Blick sichtbar ist. */
+function kachelnEinpassen(raster, anzahl, mass){
+  if(!raster || !anzahl) return;
+  const breite = raster.clientWidth;
+  const hoehe = mass.hoehe;
+  if(breite <= 0 || hoehe <= 0) return;
+  const abstand = mass.abstand;
+  let beste = null;
+  for(let spalten = 1; spalten <= anzahl; spalten++){
+    const zeilen = Math.ceil(anzahl / spalten);
+    const b = (breite - abstand * (spalten - 1)) / spalten;
+    const h = (hoehe - abstand * (zeilen - 1)) / zeilen;
+    if(b < mass.minBreite || h < mass.minHoehe) continue;
+    /* Breite zaehlt staerker als Hoehe: eine breite, flache Kachel liest sich
+       besser als eine schmale, hohe. */
+    const guete = Math.min(b, h * 1.6);
+    if(!beste || guete > beste.guete) beste = {spalten, b, h, guete};
+  }
+  if(!beste){
+    const spalten = Math.max(1, Math.floor((breite + abstand) / (mass.minBreite + abstand)));
+    beste = {spalten, b: (breite - abstand * (spalten - 1)) / spalten, h: mass.minHoehe};
+  }
+  const zeilenhoehe = Math.floor(Math.min(beste.h, mass.maxHoehe));
+  raster.style.gridTemplateColumns = `repeat(${beste.spalten}, minmax(0, 1fr))`;
+  raster.style.gridAutoRows = zeilenhoehe + "px";
+  raster.style.setProperty("--kachel-breite", Math.floor(Math.min(beste.b, mass.maxBreite)) + "px");
+  raster.style.setProperty("--kachel-hoehe", zeilenhoehe + "px");
+  if(mass.bildAnteil){
+    const bild = Math.max(22, Math.min(56, Math.floor(zeilenhoehe * mass.bildAnteil)));
+    raster.style.setProperty("--bildgroesse", bild + "px");
+  }
+}
+
+function kategorienEinpassen(){
+  const raster = document.getElementById("grid");
+  const wrap = document.getElementById("grid-wrap");
+  if(!raster || !wrap) return;
+  const cs = getComputedStyle(wrap);
+  const hoehe = wrap.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+  kachelnEinpassen(raster, raster.children.length,
+    {abstand:14, minBreite:118, minHoehe:80, maxHoehe:240, maxBreite:460, hoehe});
+}
+
+function katFensterEinpassen(){
+  const raster = document.querySelector(".kat-raster");
+  const fenster = document.querySelector(".kat-fenster");
+  if(!raster || !fenster) return;
+  /* Das Fenster darf hoechstens 88 vh hoch werden (siehe .modal). Alles ausser
+     dem Raster - Kopfzeile, Knopf, Innenabstaende, Raender - wird gemessen statt
+     geschaetzt; eine zu knappe Schaetzung fuehrte sonst doch wieder zum Scrollen. */
+  raster.style.gridAutoRows = "";
+  const rest = fenster.scrollHeight - raster.offsetHeight;
+  /* Ein paar Pixel Reserve: Ohne sie fehlten durch Rundung beim Umbruch
+     regelmaessig 2 bis 6 Pixel und es wurde doch gescrollt. */
+  const platz = Math.max(150, window.innerHeight * 0.88 - rest - 12);
+  kachelnEinpassen(raster, raster.children.length,
+    {abstand:12, minBreite:104, minHoehe:118, maxHoehe:210, maxBreite:340, hoehe:platz, bildAnteil:0.30});
+}
+
+/* Nach einer Groessenaenderung des Fensters neu einpassen. */
+window.addEventListener("resize", ()=>{ kategorienEinpassen(); katFensterEinpassen(); bonLeisteAuffrischen(); });
+
+function katPlus(id){ addToCart(id); }
+function katMinus(id){ decreaseQty(id); }
+
+/* Frischt Mengen und Bon-Summe im offenen Kategorie-Fenster auf, ohne es neu
+   aufzubauen - sonst springt die Ansicht bei jedem Antippen. */
+function aktualisiereKatFenster(){
+  const bon = document.getElementById("kat-bon");
+  if(!bon) return;
+  bon.textContent = "Bon: " + fmt(getTotal());
+  const posten = getActiveTab().items;
+  document.querySelectorAll(".kat-menge").forEach(zeile=>{
+    const id = zeile.id.replace("katmenge-", "");
+    const menge = posten[id] || 0;
+    zeile.classList.toggle("leer", menge === 0);
+    const zahl = document.getElementById("katzahl-" + id);
+    if(zahl) zahl.textContent = menge;
   });
 }
 
@@ -683,7 +836,50 @@ function renderTabs(){
     if(activeTabId==="last-order") nameEl.textContent = "🕓 Letzte Bestellung";
     else nameEl.textContent = getActiveTab().name === "Schnellverkauf" ? "Bon" : getActiveTab().name;
   }
+  bonLeisteAuffrischen();
 }
+/* Zeigt an, ob unter der Bon-Leiste noch etwas liegt, und klappt sie auf.
+   Ohne diesen Knopf war nicht erkennbar, dass es weitere Bons gibt - die Leiste
+   scrollte still vor sich hin. */
+let bonsAusgeklappt = false;
+function bonsUmschalten(){
+  bonsAusgeklappt = !bonsAusgeklappt;
+  bonLeisteAuffrischen();
+}
+function bonLeisteAuffrischen(){
+  const reihe = document.getElementById("tab-row");
+  const knopf = document.getElementById("bon-mehr");
+  if(!reihe || !knopf) return;
+  reihe.classList.toggle("ausgeklappt", bonsAusgeklappt);
+
+  const kante = reihe.getBoundingClientRect().bottom;
+  let verborgen = 0, verborgenOffen = 0;
+  [...reihe.children].forEach(chip=>{
+    if(chip.getBoundingClientRect().bottom > kante + 2){
+      verborgen++;
+      if(chip.classList.contains("guest-active")) verborgenOffen++;
+    }
+  });
+
+  if(bonsAusgeklappt){
+    /* Aufgeklappt kann die Leiste bei sehr vielen Bons immer noch scrollen;
+       dann bleibt der Hinweis stehen, nur ohne Zahl. */
+    const scrollt = reihe.scrollHeight > reihe.clientHeight + 2;
+    knopf.hidden = false;
+    knopf.textContent = "▴ weniger";
+    knopf.classList.remove("offen");
+    reihe.classList.toggle("abgeschnitten", scrollt);
+    return;
+  }
+  knopf.hidden = verborgen === 0;
+  reihe.classList.toggle("abgeschnitten", verborgen > 0);
+  if(verborgen > 0){
+    knopf.textContent = "▾ " + verborgen + " weitere"
+      + (verborgenOffen > 0 ? " · " + verborgenOffen + " offen" : "");
+    knopf.classList.toggle("offen", verborgenOffen > 0);
+  }
+}
+
 function switchTab(id){
   activeTabId = id;
   if(id !== "last-order") saveTabs();
@@ -813,6 +1009,7 @@ function addToCart(id){
   saveTabs();
   renderTabs();
   renderCart();
+  aktualisiereKatFenster();
 }
 function increaseQty(id){
   const tab = getActiveTab();
@@ -820,6 +1017,7 @@ function increaseQty(id){
   saveTabs();
   renderTabs();
   renderCart();
+  aktualisiereKatFenster();
 }
 function decreaseQty(id){
   const tab = getActiveTab();
@@ -829,13 +1027,26 @@ function decreaseQty(id){
   saveTabs();
   renderTabs();
   renderCart();
+  aktualisiereKatFenster();
 }
 function clearCart(){
   if(activeTabId === "last-order") return;
-  getActiveTab().items = {};
-  saveTabs();
-  renderTabs();
-  renderCart();
+  const menge = Object.values(getActiveTab().items).reduce((a,b)=>a+b,0);
+  if(menge === 0){ return; }
+  /* Rueckfrage, weil ein Fehlgriff hier den ganzen Bon kostet. */
+  showConfirm(
+    "Bon leeren?",
+    `Es liegen <span class="confirm-name">${menge} Artikel</span> im Bon. Wirklich alles entfernen?`,
+    "Leeren",
+    ()=>{
+      getActiveTab().items = {};
+      saveTabs();
+      renderTabs();
+      renderCart();
+      aktualisiereKatFenster();
+      closeModal();
+    }
+  );
 }
 
 /* ---------- Daten pruefen ----------
@@ -1225,7 +1436,6 @@ async function resetDaily(){
   updateDailyDisplay();
   /* Zum Tagesabschluss darf sich die Reihenfolge neu einpendeln - da steht
      niemand am Tresen und wartet. */
-  rangfolgeNeuBestimmen();
   renderGrid();
   closeModal();
 }
@@ -1803,13 +2013,11 @@ function importData(event){
            fuer fast jedes Produkt eine Nachbestell-Warnung. */
         if(data.schwelleMigriert !== true) altnullenAufNichtGesetzt(inventory);
         if(typeof data.pin === "string") await storageSet("kasse:pin", data.pin);
-        rangfolgeNeuBestimmen();
         await datensatzSichern();
         /* Nach dem Einlesen gilt die Umstellung als erledigt - egal aus welcher
            Fassung die Datei kam. Sonst liefe sie beim naechsten Start erneut und
            wuerde bewusst gesetzte Nullen wieder abschalten. */
         await storageSet("kasse:schwelle-migriert-v1", true);
-        renderCategories();
         renderGrid();
         renderManageModal();
         renderTabs();
@@ -1829,7 +2037,7 @@ async function addCategory(){
   if(categories.includes(name)){ input.value=""; return; }
   categories.push(name);
   await storageSet("kasse:categories", categories);
-  renderCategories();
+  renderGrid();
   renderManageModal();
 }
 function deleteCategory(index){
@@ -1847,8 +2055,6 @@ function deleteCategory(index){
     products.forEach(p=>{ if(p.category===cat) p.category = "Sonstiges"; });
     await storageSet("kasse:categories", categories);
     await storageSet("kasse:products", products);
-    if(activeCategory===cat) activeCategory="Alle";
-    renderCategories();
     renderGrid();
     renderManageModal();
   });
@@ -1866,7 +2072,6 @@ function deleteProduct(id){
       delete inventory[id];
       await storageSet("kasse:products", products);
       await storageSet("kasse:inventory", inventory);
-      rangfolgeNeuBestimmen();
       renderGrid();
       renderManageModal();
       updateInventoryBadge();
@@ -1979,7 +2184,7 @@ async function saveProduct(){
     if(!categories.includes(category)){
       categories.push(category);
       await storageSet("kasse:categories", categories);
-      renderCategories();
+      renderGrid();
     }
   }
   if(!name || isNaN(price) || price < 0){
@@ -1996,8 +2201,6 @@ async function saveProduct(){
   }
   editingProductId = null;
   await storageSet("kasse:products", products);
-  rangfolgeNeuBestimmen();
-  renderCategories();
   renderGrid();
   openManage();
 }

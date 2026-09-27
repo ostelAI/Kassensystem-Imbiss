@@ -75,7 +75,7 @@ Datei/Version austauschen = Daten bleiben erhalten, solange Origin
 | `kasse:schwelle-migriert-v1` | Merker, dass die einmalige Schwellwert-Umstellung gelaufen ist (siehe unten). Nicht löschen. |
 | `kasse:pin` | SHA-256-Prüfsumme der PIN für die Umsatzansichten. Nie im Klartext. Fehlt der Key, ist noch keine PIN vergeben. |
 | `kasse:daily-total` / `kasse:daily-sales` | Tagesumsatz / Tages-Verkaufszähler pro Produkt, resettet bei Tagesabschluss |
-| `kasse:total-sales` | Verkaufszähler pro Produkt, **niemals zurückgesetzt** – bestimmt die Sortierung in der "Alle"-Ansicht (meistverkauft oben) |
+| `kasse:total-sales` | Verkaufszähler pro Produkt, **niemals zurückgesetzt**. Seit der Umstellung auf die Kategorie-Ansicht steuert er keine Sortierung mehr, wird aber weiter mitgezählt und gesichert |
 | `kasse:day-history` | Archiv vergangener Tage (max. 60), entsteht bei jedem Tagesabschluss |
 | `kasse:open-tabs` / `kasse:active-tab` | Mehrere gleichzeitig offene "Bons" (Tabs). `default`/"Schnellverkauf" ist immer vorhanden. **Gast-Tabs werden beim Bezahlen NICHT gelöscht** (seit 2.0.2) – nur die Artikel werden geleert, der Tab bleibt für Stammgäste bestehen. Löschen nur manuell über X + Bestätigungsdialog |
 | `kasse:last-completed-order` | Snapshot der zuletzt abgeschlossenen Bestellung (egal welcher Tab), read-only einsehbar über eigenen blauen Tab-Chip "🕓 Letzte Bestellung", wird bei jeder neuen Zahlung überschrieben |
@@ -239,25 +239,31 @@ dort nie ein vom Benutzer bestimmter Text:
   unverfängliches Zeichenrepertoire begrenzt hat
 
 ## Feature-Überblick (Stand v2.0.2)
-- **Dashboard**: Kopfzeile mit verdecktem Tagesumsatz (`•••`, antippen und PIN),
-  Kategorie-Tabs, Produktraster. "Alle" sortiert nach
-  Gesamt-Verkaufsranking, einzelne Kategorien alphabetisch. Die Reihenfolge
-  wird bewusst **nur zu festen Zeitpunkten** neu bestimmt (`rangfolge` /
-  `rangfolgeNeuBestimmen()`): beim Start, beim Tagesabschluss und wenn sich
-  der Produktbestand ändert. Früher wurde nach jedem Verkauf neu sortiert –
-  dadurch verschoben sich die Kacheln mitten im Betrieb unter dem Finger.
-  Zeigt Foto statt Emoji, falls eins hinterlegt ist.
-- **Bon** (rechts, dauerhaft sichtbar, kompakt): Bon-Leiste über dem Bon, die
-  Chips **brechen um** und scrollen bei Bedarf senkrecht (`#tab-row`).
-  **"+ Gast" steht außerhalb dieser Leiste** (`#tab-add`) und ist dadurch immer
-  sichtbar. Vorher lief die Leiste seitlich: Sobald der erste Verkauf
-  abgeschlossen war, schob der Chip "Letzte Bestellung" den Knopf aus dem Bild –
-  und dass man dort wischen kann, sieht man der Leiste nicht an. Die Gast-Bons
-  waren damit praktisch unauffindbar. Reihenfolge –
-  Reihenfolge: 🔴 Schnellverkauf → 🔵 Letzte Bestellung (falls vorhanden) →
-  Gäste. Gast-Chips pulsieren pink, sobald Artikel drin sind, werden nach
-  Bezahlung wieder grau (Tab bleibt aber bestehen). "+ Gast" legt neuen
-  benannten Tab an.
+- **Startseite**: nur große, farbige Kategorie-Kacheln (`renderGrid()`), keine
+  Wischleiste mehr. Farbe je Kategorie aus `KAT_FARBEN`, abhängig von der
+  Position in `categories`.
+- **Kategorie-Fenster** (`showKatFenster()`): Antippen einer Kachel öffnet ein
+  großes Fenster mit den Artikeln dieser Kategorie. Es **bleibt nach dem
+  Antippen offen** – eine Runde Bier braucht sonst dreimal denselben Weg. An
+  jeder Kachel steht die Menge im Bon mit einem Minus-Knopf zum Herunterzählen,
+  oben läuft die Bon-Summe mit. Kopfzeile und "Fertig" sind `sticky`, damit sie
+  bei vielen Artikeln nicht aus dem Bild rutschen.
+- **Mitwachsende Kacheln** (`kachelnEinpassen()`): Sucht die Aufteilung, bei der
+  alle Kacheln in die vorhandene Fläche passen und dabei so groß wie möglich
+  werden; Schrift, Bildgröße und Minus-Knopf skalieren über CSS-Variablen
+  (`--kachel-breite`, `--kachel-hoehe`, `--bildgroesse`) mit. Der verfügbare
+  Platz im Fenster wird **gemessen** statt geschätzt (plus 12 px Reserve) –
+  eine Schätzung war regelmäßig ein paar Pixel zu knapp. Erst wenn die kleinste
+  bedienbare Größe nicht mehr reicht, wird gescrollt. Auf 1280 × 800 passen so
+  rund 20 Kategorien bzw. 24 Artikel je Kategorie ohne Scrollen.
+- **Bon-Leiste**: Passen nicht alle Bons hinein, erscheint neben "+ Gast" ein
+  Knopf "▾ n weitere" (`bonLeisteAuffrischen()`), der alles aufklappt. Liegt in
+  einem verdeckten Bon Unbezahltes, steht dort zusätzlich "· n offen" und der
+  Knopf pulsiert pink. Eine reine Scroll-Geste blieb unentdeckt – derselbe
+  Fehler wie früher bei "+ Gast".
+- **Bon** (rechts, dauerhaft sichtbar, kompakt): "Kasse" ist deutlich größer und
+  steht mit 20 px Abstand unter "Leeren"; "Leeren" fragt bei gefülltem Bon nach.
+  Beides, weil im Betrieb versehentlich der falsche Knopf getroffen wurde.
 - **Kasse**: Zahlenblock, Schnellbeträge, automatische Rückgeldberechnung.
 - **📦 Inventur**: Aufklappbare Kategorien (Klick-Zustand bleibt über
   Re-Renders erhalten – wichtiger Bugfix in 2.0.1), pro Produkt/Verbrauchs-

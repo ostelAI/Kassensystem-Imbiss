@@ -23,8 +23,8 @@ was nachbestellt werden muss.
 
 | | |
 |---|---|
-| **Verkauf** | Produktraster nach Kategorien, meistverkaufte oben. Bon rechts, dauerhaft sichtbar. |
-| **Mehrere Bons** | Neben dem Schnellverkauf beliebig viele benannte Gast-Bons gleichzeitig offen. Bleiben nach dem Bezahlen bestehen. |
+| **Verkauf** | Startseite zeigt große, farbige Kategorie-Kacheln. Antippen öffnet ein Fenster mit den Artikeln dieser Kategorie. Bon rechts, dauerhaft sichtbar. |
+| **Mehrere Bons** | Neben dem Schnellverkauf beliebig viele benannte Gast-Bons gleichzeitig offen. Bleiben nach dem Bezahlen bestehen. Passen nicht alle in die Leiste, weist ein Knopf auf die übrigen hin. |
 | **Kasse** | Zifferblock, Schnellbeträge, automatisches Rückgeld. |
 | **Inventur** | Bestand je Produkt und Verbrauchsmaterial, Schwellwert für Warnungen, Wareneingang buchen. |
 | **Einkaufsliste** | Entsteht automatisch aus allem, was den Schwellwert erreicht hat. |
